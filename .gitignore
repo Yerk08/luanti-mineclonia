@@ -1,0 +1,22 @@
+# Кэш и логи
+**/.cache/
+**/debug.txt
+*.log
+
+# Базы данных (карта, игроки, авторизация, хранилище модов)
+*.sqlite
+*.sqlite-journal
+*.sqlite-wal
+*.sqlite-shm
+
+# Данные игроков и динамическое состояние мира
+**/worlds/*/players/
+**/worlds/*/env_meta.txt
+**/worlds/*/map_meta.txt
+**/worlds/*/force_loaded.txt
+**/worlds/*/ipban.txt
+**/worlds/*/mcl_maps/
+
+# Вложенные git-репозитории внутри модов
+**/mods/**/.git/
+

@@ -1,0 +1,4 @@
+# textdomain: mcl_random_plant_positions
+
+Mineclonia Random Flower Positions =
+Places flowers in a random spot on the node =

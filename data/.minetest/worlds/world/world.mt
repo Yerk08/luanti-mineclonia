@@ -1,0 +1,15 @@
+enable_damage = true
+creative_mode = false
+mod_storage_backend = sqlite3
+auth_backend = sqlite3
+player_backend = sqlite3
+backend = sqlite3
+gameid = mineclonia
+world_name = world
+load_mod_copper_golem = true
+load_mod_leads = true
+load_mod_mcl_extra_structures = true
+load_mod_mcl_fish_traps = true
+load_mod_mcl_morefood = true
+load_mod_mcl_random_plant_positions = true
+load_mod_mcl_wieldlight = true

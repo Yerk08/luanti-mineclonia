@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+.aider*
+
+# Local-only Claude Code working notes — never ship to GitHub
+CLAUDE.md
