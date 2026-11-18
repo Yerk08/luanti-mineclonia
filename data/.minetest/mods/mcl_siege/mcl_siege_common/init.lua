@@ -55,20 +55,17 @@ end
 
 -- Балансировка всех ночных врагов: ровные шансы и спавн группами
 local horde_roster = {
-	-- Основные отряды (равные веса, чтобы не было перекоса в зомби)
-	["mobs_mc:skeleton"]       = { weight = 100, min = 4, max = 8 },
-	["mobs_mc:stray"]          = { weight = 90,  min = 4, max = 8 },
-	["mobs_mc:bogged"]         = { weight = 90,  min = 4, max = 8 },
-	["mobs_mc:spider"]         = { weight = 95,  min = 4, max = 7 },
-	["mobs_mc:creeper"]        = { weight = 85,  min = 3, max = 6 },
-	["mobs_mc:pillager"]       = { weight = 65,  min = 4, max = 7 },
-
-	-- Элитные враги и «королевы» (ведьмы, эндермены, поборники) — теперь очень часто и группами
-	["mobs_mc:witch"]          = { weight = 65,  min = 2, max = 4 },
-	["mobs_mc:enderman"]       = { weight = 60,  min = 2, max = 5 },
-	["mobs_mc:vindicator"]     = { weight = 50,  min = 2, max = 4 },
-	["mobs_mc:evoker"]         = { weight = 35,  min = 1, max = 3 },
-	["mobs_mc:phantom"]        = { weight = 60,  min = 3, max = 6 },
+	["mobs_mc:zombie"]         = { weight = 160, min = 3, max = 7 },
+	["mobs_mc:husk"]           = { weight = 140, min = 3, max = 7 },
+	["mobs_mc:skeleton"]       = { weight = 100, min = 3, max = 6 },
+	["mobs_mc:stray"]          = { weight = 85,  min = 3, max = 6 },
+	["mobs_mc:bogged"]         = { weight = 85,  min = 3, max = 6 },
+	["mobs_mc:spider"]         = { weight = 90,  min = 3, max = 6 },
+	["mobs_mc:pillager"]       = { weight = 45,  min = 3, max = 5 },
+	["mobs_mc:enderman"]       = { weight = 40,  min = 1, max = 3 },
+	["mobs_mc:vindicator"]     = { weight = 30,  min = 2, max = 3 },
+	["mobs_mc:evoker"]         = { weight = 18,  min = 1, max = 2 },
+	["mobs_mc:phantom"]        = { weight = 45,  min = 2, max = 4 },
 }
 
 core.register_on_mods_loaded(function()

@@ -27,6 +27,18 @@ return function(hive)
 		{ "poison", 1, 3.5 },
 		{ "mining_fatigue", 2, 6.0 },
 	}
+	local function apply_short_effect(player, name, level, duration)
+		if not mcl_potions.registered_effects or not mcl_potions.registered_effects[name] then
+			return
+		end
+		mcl_potions.give_effect_by_level(name, player, level, duration)
+		-- Страховка: принудительно снимаем эффект по истечении duration секунд
+		core.after(duration, function()
+			if player and player:is_valid() and mcl_potions.clear_effect then
+				mcl_potions.clear_effect(player, name)
+			end
+		end)
+	end
 
 	local acid_entity = modname .. ":acid_spit"
 	core.register_entity(acid_entity, {
@@ -64,8 +76,9 @@ return function(hive)
 						source = self._shooter,
 						direct = self.object,
 					})
-					mcl_potions.give_effect_by_level("poison", obj, 1, 3.5)
-					mcl_potions.give_effect_by_level("slowness", obj, 1, 2.5)
+					apply_short_effect(obj, "poison", 1, 3.0)
+					apply_short_effect(obj, "slowness", 1, 2.5)
+
 					core.sound_play("default_cool_lava", {
 						pos = pos,
 						gain = 0.6,
@@ -212,11 +225,9 @@ return function(hive)
 				and mcl_siege.is_survival_player(object)
 				and self:line_of_sight(vector.offset(spell.pos, 0, 0.9, 0), mcl_util.target_eye_pos(object))
 			then
-				if mcl_potions.registered_effects and mcl_potions.registered_effects[f_name] then
-					mcl_potions.give_effect_by_level(f_name, object, f_lvl, f_dur)
-				end
-				if s_name ~= f_name and mcl_potions.registered_effects and mcl_potions.registered_effects[s_name] then
-					mcl_potions.give_effect_by_level(s_name, object, s_lvl, s_dur)
+				apply_short_effect(object, f_name, f_lvl, f_dur)
+				if s_name ~= f_name then
+					apply_short_effect(object, s_name, s_lvl, s_dur)
 				end
 				mcl_util.deal_damage(object, 4, { type = "magic", source = self.object, direct = self.object })
 			end

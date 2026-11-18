@@ -31,12 +31,25 @@ local chaotic_pool = {
 	{ "glowing",          1, 1, 8.0, 12.0, "#FFF066" },
 }
 
--- Частый спавн ведьм (как вы просили для «королев»)
+-- Сбалансированный спавн ведьм (не слишком частый, чтобы не перегружать бой)
 mcl_siege.configure_spawns("mobs_mc:witch", function(spawner)
-	spawner.weight = 55
-	spawner.pack_min = 2
-	spawner.pack_max = 3
+	spawner.weight = 18
+	spawner.pack_min = 1
+	spawner.pack_max = 2
 end)
+
+-- Безопасное наложение эффекта с гарантированным снятием по истечении duration секунд
+local function apply_short_effect(player, name, level, duration)
+	if not mcl_potions.registered_effects or not mcl_potions.registered_effects[name] then
+		return
+	end
+	mcl_potions.give_effect_by_level(name, player, level, duration)
+	core.after(duration, function()
+		if player and player:is_valid() and mcl_potions.clear_effect then
+			mcl_potions.clear_effect(player, name)
+		end
+	end)
+end
 
 -- Собираем случайный набор из 2-3 неповторяющихся эффектов для каждого ритуала
 local function roll_random_curse()
@@ -44,7 +57,6 @@ local function roll_random_curse()
 	for i = 1, #chaotic_pool do
 		indices[i] = i
 	end
-	-- Перемешиваем пул
 	for i = #indices, 2, -1 do
 		local j = math.random(i)
 		indices[i], indices[j] = indices[j], indices[i]
@@ -52,22 +64,20 @@ local function roll_random_curse()
 
 	local count = math.random(2, 3)
 	local chosen_effects = {}
-	local rune_color = chaotic_pool[indices[1]][6]
+	local rune_color = chaotic_pool[indices][6]
 
 	for i = 1, count do
 		local entry = chaotic_pool[indices[i]]
-		local name = entry[1]
-		-- Проверяем, зарегистрирован ли эффект в текущей версии Mineclonia
+		local name = entry
 		if mcl_potions.registered_effects and mcl_potions.registered_effects[name] then
-			local level = math.random(entry[2], entry[3])
-			local duration = entry[4] + math.random() * (entry[5] - entry[4])
+			local level = math.random(entry, entry)
+			local duration = entry + math.random() * (entry - entry)
 			chosen_effects[#chosen_effects + 1] = { name, level, duration }
 		end
 	end
 
-	-- Запасной вариант, если ни один эффект не подошёл
 	if #chosen_effects == 0 then
-		chosen_effects[1] = { "levitation", 1, 1.8 }
+		chosen_effects = { "levitation", 1, 1.8 }
 	end
 
 	return {
@@ -86,7 +96,8 @@ local function cast(self, ritual)
 		if mcl_siege.is_survival_player(player) and vector.distance(pos, ritual.center) <= RADIUS
 			and self:line_of_sight(vector.offset(ritual.center, 0, 0.9, 0), mcl_util.target_eye_pos(player)) then
 			for _, effect in ipairs(ritual.curse.effects) do
-				mcl_potions.give_effect_by_level(effect[1], player, effect[2], effect[3])
+				local ename, elvl, edur = unpack(effect)
+				apply_short_effect(player, ename, elvl, edur)
 			end
 		end
 	end
@@ -118,12 +129,11 @@ function witch:attack_ranged(attach_pos, pos, dtime, target_pos, visible)
 	end
 
 	local distance = vector.distance(pos, target_pos)
-	-- Колдуют чаще и с более дальней дистанции (до 15 блоков)
 	if state.cooldown <= 0 and visible and distance >= 2.5 and distance <= 15
 		and self:get_wielditem():is_empty() then
 		local curse = roll_random_curse()
 		state.ritual = { center = target_pos, remaining = WARNING, curse = curse }
-		state.cooldown = math.random(6, 10)
+		state.cooldown = math.random(7, 11)
 		self:cancel_navigation()
 		self:halt_in_tracks()
 		self:look_at(target_pos)

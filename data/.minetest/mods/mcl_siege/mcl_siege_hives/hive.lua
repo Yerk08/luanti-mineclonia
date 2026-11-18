@@ -14,8 +14,8 @@ local CACHE = prefix .. "cache"
 
 local CELL_SIZE = 112
 local MIN_SPACING = 96
--- Фазы радиуса: 4 -> 7 -> 10 -> 13 -> 20
-local PHASE_RADII = { 4, 7, 10, 13, 20 }
+-- Фазы радиуса: 4 -> 7 -> 10 -> 13
+local PHASE_RADII = { 4, 7, 10, 13 }
 local MAX_PHASE = #PHASE_RADII
 local CARDINAL = { { 1, 0 }, { 0, 1 }, { -1, 0 }, { 0, -1 } }
 
@@ -34,7 +34,7 @@ local function get_step_interval(phase)
 end
 
 local function get_phase_pause(phase)
-	return 0.5 * (1 ^ (phase - 1)) -- 0.5s -> 1.5s -> 4.5s -> 13.5s -> 40.5s
+	return 0.5 * (2 ^ (phase - 1)) -- 0.5s -> 1.5s -> 4.5s -> 13.5s -> 40.5s
 end
 
 local function cell_key(x, z)
@@ -488,6 +488,176 @@ local function elevate_heart(pos, meta, resume_timer)
 	core.get_node_timer(above):start(resume_timer)
 	return above
 end
+
+-- Эффектное раскрытие созревшего кокона (разворот на 8 лепестков) и выброс огромной орды зомби
+local function hatch_cocoon(heart_pos, max_r)
+	local y_max = math.floor(max_r * 1.5) + 6
+	local petals = {}
+
+	-- 1. Раскрываем кокон как гигантский цветок: сносим верхний купол и прорезаем 8 широких лепестков до земли
+	for dx = -max_r - 3, max_r + 3 do
+		for dy = -6, y_max do
+			for dz = -max_r - 3, max_r + 3 do
+				local dist = math.sqrt(dx * dx + dz * dz)
+				if dist <= max_r + 4 then
+					local angle = math.atan2(dz, dx)
+					local jagged_rim = math.sin(angle * 6) * 2
+					local open_everything = (dy >= -2 + jagged_rim)
+
+					if open_everything then
+						local p = vector.offset(heart_pos, dx, dy, dz)
+						local name = core.get_node(p).name
+						if is_existing_hive_block(name) and name ~= CACHE and name ~= HEART then
+							petals[#petals + 1] = {
+								pos = p,
+								-- Раскрывается эффектной волной от вершины купола вниз к основанию
+								score = -dy * 15 + dist,
+							}
+						end
+					end
+				end
+			end
+		end
+	end
+
+	table.sort(petals, function(a, b)
+		return a.score < b.score
+	end)
+
+	-- Многослойный оглушительный звук разрыва и пробуждения орды
+	core.sound_play("thunder", {
+		pos = heart_pos,
+		gain = 4.6,
+		pitch = 0.75,
+		max_hear_distance = 200,
+	}, true)
+	core.sound_play("mobs_mc_ender_dragon_death", {
+		pos = heart_pos,
+		gain = 4.6,
+		pitch = 0.65,
+		max_hear_distance = 200,
+	}, true)
+	core.sound_play("mobs_mc_slime_big", {
+		pos = heart_pos,
+		gain = 4.6,
+		pitch = 0.5,
+		max_hear_distance = 200,
+	}, true)
+	for i = 1, 4 do
+		core.after(i * 0.25, function()
+			core.sound_play("mobs_mc_zombie_growl", {
+				pos = heart_pos,
+				gain = 1.4,
+				pitch = (65 + i * 10) / 100,
+				max_hear_distance = 64,
+			}, true)
+		end)
+	end
+
+	-- Находим ближайшего игрока, чтобы орда сразу бросилась на него
+	local nearest_player = nil
+	local best_dist = 80
+	for _, obj in ipairs(core.get_objects_inside_radius(heart_pos, 80)) do
+		if obj:is_player() and mcl_siege.is_survival_player(obj) then
+			local d = vector.distance(heart_pos, obj:get_pos())
+			if d < best_dist then
+				best_dist = d
+				nearest_player = obj
+			end
+		end
+	end
+
+	local idx = 1
+	local spawned_zombies = 0
+	local total_horde = 85 -- Огромная армия из 85 зомби
+	local zombie_types = {
+		"mobs_mc:zombie",
+		"mobs_mc:zombie",
+		"mobs_mc:zombie",
+		"mobs_mc:husk",
+		"mobs_mc:husk",
+		"mobs_mc:baby_zombie",
+		"mobs_mc:baby_husk",
+	}
+
+	local function open_petal_step()
+		local removed = 0
+		-- Сносим по 220 блоков за кадр для мощного обвала оболочки
+		while idx <= #petals and removed < 220 do
+			local p = petals[idx].pos
+			idx = idx + 1
+			local node = core.get_node(p)
+			if is_existing_hive_block(node.name) and node.name ~= CACHE and not core.is_protected(p, "") then
+				core.remove_node(p)
+				removed = removed + 1
+				if removed % 14 == 0 then
+					core.add_particlespawner({
+						amount = 10,
+						time = 0.1,
+						minpos = vector.subtract(p, 0.6),
+						maxpos = vector.add(p, 0.6),
+						minvel = { x = -3.5, y = 1.0, z = -3.5 },
+						maxvel = { x = 3.5, y = 4.5, z = 3.5 },
+						minacc = { x = 0, y = -9.8, z = 0 },
+						maxacc = { x = 0, y = -9.8, z = 0 },
+						minexptime = 0.5,
+						maxexptime = 1.2,
+						minsize = 2.0,
+						maxsize = 4.0,
+						node = node,
+					})
+				end
+			end
+		end
+
+		if removed > 0 then
+			core.sound_play("mobs_mc_zombie_door_break", {
+				pos = heart_pos,
+				gain = 1.1,
+				pitch = math.random(65, 95) / 100,
+				max_hear_distance = 56,
+			}, true)
+		end
+
+		-- Выбрасываем по 100 зомби за волну из всего объёма раскрытого бутона
+		if spawned_zombies < total_horde then
+			for _ = 1, 100 do
+				if spawned_zombies >= total_horde then
+					break
+				end
+				local angle = math.random() * math.pi * 2
+				local r = math.random(2, math.max(5, max_r - 2))
+				local sx = math.floor(math.cos(angle) * r + 0.5)
+				local sz = math.floor(math.sin(angle) * r + 0.5)
+				for dy = 8, -12, -1 do
+					local cell = vector.offset(heart_pos, sx, dy, sz)
+					if mcl_siege.standable(cell, 2) and not core.is_protected(cell, "") then
+						local kind = zombie_types[math.random(#zombie_types)]
+						local obj = core.add_entity(vector.offset(cell, 0, -0.45, 0), kind)
+						if obj and obj:is_valid() then
+							local out_dir = vector.normalize(vector.new(sx, 0.35, sz))
+							obj:set_velocity(vector.multiply(out_dir, 7.5))
+							local ent = obj:get_luaentity()
+							if ent and nearest_player then
+								ent.attack = nearest_player
+								ent.state = "attack"
+							end
+							spawned_zombies = spawned_zombies + 1
+							break
+						end
+					end
+				end
+			end
+		end
+
+		if idx <= #petals or spawned_zombies < total_horde then
+			core.after(0.1, open_petal_step)
+		end
+	end
+
+	core.after(0.1, open_petal_step)
+end
+
 -- Пошаговая надстройка нового слоя с активным подъёмом сердца, экспоненциальным замедлением и без регенерации сломанного
 local function grow(pos)
 	local meta = core.get_meta(pos)
@@ -600,6 +770,10 @@ local function grow(pos)
 			end
 		else
 			meta:set_int("cursor", #plan + 1)
+			if meta:get_int("hatched") == 0 then
+				meta:set_int("hatched", 1)
+				hatch_cocoon(pos, PHASE_RADII[MAX_PHASE] or 20)
+			end
 		end
 	end
 	return false
@@ -616,6 +790,18 @@ local function part_heart(pos)
 	end
 	return nil, false
 end
+local function apply_short_effect(player, name, level, duration)
+	if not mcl_potions.registered_effects or not mcl_potions.registered_effects[name] then
+		return
+	end
+	apply_short_effect(player, name, level, duration)
+
+	core.after(duration, function()
+		if player and player:is_valid() and mcl_potions.clear_effect then
+			mcl_potions.clear_effect(player, name)
+		end
+	end)
+end
 local function trap_tick(pos)
 	local heart, unloaded = part_heart(pos)
 	if not heart then
@@ -629,8 +815,8 @@ local function trap_tick(pos)
 		return true
 	end
 	mcl_siege.rune(pos, 1.3, "#C94CF2", 0.8)
-	mcl_potions.give_effect_by_level("slowness", target, 2, 3.5)
-	mcl_potions.give_effect_by_level("darkness", target, 1, 3)
+	apply_short_effect(target, "slowness", 2, 3.5)
+	apply_short_effect(target, "darkness", 1, 3.0)
 	core.get_node_timer(pos):start(7)
 	return false
 end
@@ -646,7 +832,7 @@ local function acid_tick(pos)
 	if not target then
 		return true
 	end
-	mcl_potions.give_effect_by_level("poison", target, 1, 3.5)
+	apply_short_effect(target, "poison", 1, 3.5)
 	mcl_util.deal_damage(target, 2, { type = "magic" })
 	core.sound_play("default_cool_lava", {
 		pos = pos,

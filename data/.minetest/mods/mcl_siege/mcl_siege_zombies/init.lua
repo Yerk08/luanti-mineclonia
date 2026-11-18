@@ -4,22 +4,24 @@ local reinforcement_after = 0
 local progress = setmetatable({}, { __mode = "k" })
 
 -- Настройки агрессии и разрушений
-local BREAK_TIME = 2.5           -- Ломают блоки быстро
-local BREAK_WINDOW = 45          -- Окно сброса лимитов
-local LOCAL_LIMIT = 16           -- Лимит разрушенных блоков в радиусе 16 блоков
-local GLOBAL_LIMIT = 64          -- Общий лимит разрушений
+local BREAK_TIME = 2.5 -- Ломают блоки быстро
+local BREAK_WINDOW = 45 -- Окно сброса лимитов
+local LOCAL_LIMIT = 16 -- Лимит разрушенных блоков в радиусе 16 блоков
+local GLOBAL_LIMIT = 64 -- Общий лимит разрушений
 local MAX_BLOCKS_PER_ZOMBIE = 12 -- Сколько блоков может пробить один зомби
 
 local function configure_horde(spawner)
-	spawner.weight = (spawner.biomes[1] == "Desert") and 20 or 100
-	spawner.pack_min = 5
-	spawner.pack_max = 9
+	spawner.weight = (spawner.biomes[1] == "Desert") and 30 or 160
+	spawner.pack_min = 3
+	spawner.pack_max = 7
 end
 
-mcl_siege.configure_spawns("mobs_mc:zombie", configure_horde)
-mcl_siege.configure_spawns("mobs_mc:husk", function(spawner)
-	configure_horde(spawner)
-	spawner.weight = 80
+core.register_on_mods_loaded(function()
+	mcl_siege.configure_spawns("mobs_mc:zombie", configure_horde)
+	mcl_siege.configure_spawns("mobs_mc:husk", function(spawner)
+		configure_horde(spawner)
+		spawner.weight = 140
+	end)
 end)
 
 local function can_break(pos)
@@ -81,9 +83,15 @@ end
 local function attack_melee(self, attach_pos, pos, dtime, target_pos, visible)
 	local state = progress[self]
 	local target = self.attack
-	if visible or not target or not target:is_player() or self.jockey_vehicle
-		or (self._siege_blocks_broken or 0) >= MAX_BLOCKS_PER_ZOMBIE or vector.distance(pos, target_pos) > 16
-		or mcl_vars.difficulty == 0 then
+	if
+		visible
+		or not target
+		or not target:is_player()
+		or self.jockey_vehicle
+		or (self._siege_blocks_broken or 0) >= MAX_BLOCKS_PER_ZOMBIE
+		or vector.distance(pos, target_pos) > 16
+		or mcl_vars.difficulty == 0
+	then
 		progress[self] = nil
 		return mob.attack_melee(self, attach_pos, pos, dtime, target_pos, visible)
 	end
@@ -127,11 +135,16 @@ local function attack_melee(self, attach_pos, pos, dtime, target_pos, visible)
 		state.hit_at = state.elapsed + 0.6
 		self:set_animation("punch")
 		core.sound_play("mobs_mc_zombie_door_break", {
-			pos = state.node, gain = 0.6, max_hear_distance = 24,
+			pos = state.node,
+			gain = 0.6,
+			max_hear_distance = 24,
 		}, true)
 		if math.random(1, 3) == 1 then
 			core.sound_play("mobs_mc_zombie_growl", {
-				pos = pos, gain = 0.7, pitch = math.random(80, 110) / 100, max_hear_distance = 24,
+				pos = pos,
+				gain = 0.7,
+				pitch = math.random(80, 110) / 100,
+				max_hear_distance = 24,
 			}, true)
 		end
 		local node = core.get_node(state.node)
@@ -210,8 +223,7 @@ end
 for _, kind in ipairs({ "zombie", "baby_zombie", "husk", "baby_husk" }) do
 	local def = core.registered_entities["mobs_mc:" .. kind]
 	if def then
-		local siege_enabled = mobs_mc.is_mob_griefing_enabled("zombie")
-			and mobs_mc.is_mob_griefing_enabled(kind)
+		local siege_enabled = mobs_mc.is_mob_griefing_enabled("zombie") and mobs_mc.is_mob_griefing_enabled(kind)
 		local old_ai_step = def.ai_step
 		def.ai_step = function(self, dtime)
 			self._can_break_doors = false
@@ -232,4 +244,3 @@ for _, kind in ipairs({ "zombie", "baby_zombie", "husk", "baby_husk" }) do
 		end
 	end
 end
-
