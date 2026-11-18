@@ -30,11 +30,11 @@ local soft_shell_groups = {
 
 -- Экспоненциальное замедление скорости роста по фазам
 local function get_step_interval(phase)
-	return 0.03 * (2 ^ (phase - 1)) -- 0.03s -> 0.06s -> 0.12s -> 0.24s -> 0.48s
+	return 0.03 * (1 ^ (phase - 1)) -- 0.03s -> 0.06s -> 0.12s -> 0.24s -> 0.48s
 end
 
 local function get_phase_pause(phase)
-	return 0.5 * (3 ^ (phase - 1)) -- 0.5s -> 1.5s -> 4.5s -> 13.5s -> 40.5s
+	return 0.5 * (1 ^ (phase - 1)) -- 0.5s -> 1.5s -> 4.5s -> 13.5s -> 40.5s
 end
 
 local function cell_key(x, z)
@@ -86,7 +86,7 @@ function hive.locate_heart(anchor, id)
 	if living_heart(anchor, id) then
 		return anchor
 	end
-	for dy = 1, 16 do
+	for dy = 1, 48 do
 		local up = vector.offset(anchor, 0, dy, 0)
 		if living_heart(up, id) then
 			return up
@@ -253,7 +253,7 @@ local function generate_cocoon_plan(phase, seed)
 	local rz = rx
 	local ry = math.floor(rx * 1.45) + 2
 	-- Глубокое основание, перекрывающее весь путь подъёма сердца
-	local y_depth = math.max(5, math.min(16, math.floor(rx * 0.65) + phase * 2))
+	local y_depth = math.max(5, math.min(26, math.floor(rx * 0.9) + phase * 3))
 	local prev_r = phase > 1 and PHASE_RADII[phase - 1] or 0
 
 	local grid = {}
@@ -484,7 +484,7 @@ local function elevate_heart(pos, meta, resume_timer)
 	new_meta:set_int("lift_steps", lifts + 1)
 	new_meta:set_string("infotext", S("Hive heart of @1", qname))
 	-- Под сердцем ставим живую слизь (строим основу под собой)
-	core.set_node(pos, { name = SLIME })
+	core.swap_node(pos, { name = SLIME })
 	core.get_node_timer(above):start(resume_timer)
 	return above
 end
@@ -518,8 +518,8 @@ local function grow(pos)
 	end
 	-- Активный подъём сердца вверх: поднимаем его на +1 блок на 35% и 70% прогресса фазы
 	local lifts = meta:get_int("lift_steps")
-	local target_lifts = math.floor((cursor / math.max(1, #plan)) * 2.2)
-	if lifts < target_lifts and lifts < 10 then
+	local target_lifts = math.floor((cursor / math.max(1, #plan)) * 5.5)
+	if lifts < target_lifts then
 		local moved = elevate_heart(pos, meta, get_step_interval(phase))
 		if not vector.equals(moved, pos) then
 			return false
@@ -658,7 +658,7 @@ local function acid_tick(pos)
 	return false
 end
 local BROOD = {
-	{ 65, "mobs_mc:witch" },
+	{ 10, "mobs_mc:witch" },
 	{ 23, "mobs_mc:skeleton" },
 	{ 12, "mobs_mc:creeper" },
 }
@@ -740,6 +740,85 @@ local function open_cache(pos, node, clicker)
 		end
 	end
 end
+-- Постепенный распад кокона после уничтожения сердца
+local function start_decay(center_pos, max_radius)
+	local radius = math.max(max_radius + 6, 26)
+	local y_min = -36 -- Захватываем всё глубокое основание кокона ниже поднятого сердца
+	local y_max = math.floor(radius * 1.5) + 6
+	local targets = {}
+
+	for dx = -radius, radius do
+		for dy = y_min, y_max do
+			for dz = -radius, radius do
+				local p = vector.offset(center_pos, dx, dy, dz)
+				local name = core.get_node(p).name
+				if is_existing_hive_block(name) and name ~= CACHE then
+					targets[#targets + 1] = {
+						pos = p,
+						dist = dx * dx + dy * dy + dz * dz,
+					}
+				end
+			end
+		end
+	end
+
+	table.sort(targets, function(a, b)
+		return a.dist < b.dist
+	end)
+
+	core.sound_play("mobs_mc_ender_dragon_death", {
+		pos = center_pos,
+		gain = 0.7,
+		pitch = 0.75,
+		max_hear_distance = 48,
+	}, true)
+
+	local idx = 1
+	local function decay_step()
+		if idx > #targets then
+			return
+		end
+		local removed = 0
+		while idx <= #targets and removed < 65 do
+			local p = targets[idx].pos
+			idx = idx + 1
+			local node = core.get_node(p)
+			if is_existing_hive_block(node.name) and node.name ~= CACHE and not core.is_protected(p, "") then
+				core.remove_node(p)
+				removed = removed + 1
+				if removed % 8 == 0 then
+					core.add_particlespawner({
+						amount = 5,
+						time = 0.1,
+						minpos = vector.subtract(p, 0.4),
+						maxpos = vector.add(p, 0.4),
+						minvel = { x = -1.2, y = -0.5, z = -1.2 },
+						maxvel = { x = 1.2, y = 1.2, z = 1.2 },
+						minacc = { x = 0, y = -9.8, z = 0 },
+						maxacc = { x = 0, y = -9.8, z = 0 },
+						minexptime = 0.4,
+						maxexptime = 0.9,
+						minsize = 1.2,
+						maxsize = 2.4,
+						node = node,
+					})
+				end
+			end
+		end
+		if removed > 0 then
+			core.sound_play("default_dig_crumbly", {
+				pos = targets[math.min(idx, #targets)].pos,
+				gain = 0.5,
+				pitch = math.random(70, 100) / 100,
+				max_hear_distance = 32,
+			}, true)
+		end
+		core.after(0.12, decay_step)
+	end
+
+	core.after(0.15, decay_step)
+end
+
 core.register_node(HEART, {
 	description = S("Hive heart"),
 	tiles = { "mcl_core_slime.png^[colorize:#D9385A:95" },
@@ -747,8 +826,18 @@ core.register_node(HEART, {
 	drop = "",
 	light_source = 7,
 	_mcl_hardness = 0.8,
-	_mcl_blast_resistance = 3,
+	_mcl_blast_resistance = 1200, -- Защита от взрывов криперов внутри улья
 	on_timer = grow,
+	after_dig_node = function(pos, oldnode, oldmetadata, digger)
+		local fields = oldmetadata and oldmetadata.fields or {}
+		local id = fields.hive_id or ""
+		if id ~= "" then
+			storage:set_int("sealed_" .. id, 1)
+		end
+		local phase = math.max(1, tonumber(fields.phase) or 1)
+		local max_r = PHASE_RADII[phase] or 20
+		start_decay(pos, max_r)
+	end,
 })
 core.register_node(SLIME, {
 	description = S("Hive living slime"),
@@ -787,13 +876,9 @@ core.register_node(WEB, {
 	drawtype = "plantlike",
 	tiles = { "mcl_core_web.png" },
 	paramtype = "light",
+	sunlight_propagates = true,
 	walkable = false,
-	liquidtype = "source",
-	liquid_alternative_flowing = WEB,
-	liquid_alternative_source = WEB,
-	liquid_viscosity = 14,
-	liquid_range = 0,
-	drowning = 0,
+	move_resistance = 7, -- Вязкое замедление как у ванильной паутины, но БЕЗ растекания жидкости
 	groups = {
 		crumbly = 3,
 		oddly_breakable_by_hand = 3,

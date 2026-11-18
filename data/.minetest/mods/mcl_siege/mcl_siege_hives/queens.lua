@@ -160,7 +160,8 @@ return function(hive)
 			return
 		end
 		for _, offset in ipairs(CHECK_SITES) do
-			local candidate = vector.offset(origin, offset[1], 0, offset[2])
+			local ox, oz = unpack(offset)
+			local candidate = vector.offset(origin, ox, 0, oz)
 			if hive.found(candidate, self.description, self._siege_queen_id) then
 				self._siege_heart = candidate
 				self:restrict_to(candidate, 26)
@@ -180,7 +181,6 @@ return function(hive)
 		if not pos then
 			return
 		end
-		-- Проверяем застревание раз в секунду
 		if self:check_timer("siege_unstuck", 1.0) then
 			unstuck_from_blocks(self, pos)
 		end
@@ -190,25 +190,33 @@ return function(hive)
 		local anchor = self._siege_heart
 		if not anchor then
 			try_found(self, pos)
-		elseif vector.distance(anchor, pos) <= 10 and hive.is_alive(anchor, self._siege_queen_id) then
-			self.health = math.min(self.initial_properties.hp_max, self.health + 2)
+		else
+			local actual = hive.locate_heart(anchor, self._siege_queen_id)
+			if actual then
+				self._siege_heart = actual
+				if vector.distance(actual, pos) <= 12 then
+					self.health = math.min(self.initial_properties.hp_max, self.health + 2)
+				end
+			end
 		end
 	end
 
 	local function pulse(self, spell)
 		local first = queen_curses[math.random(#queen_curses)]
 		local second = queen_curses[math.random(#queen_curses)]
+		local f_name, f_lvl, f_dur = unpack(first)
+		local s_name, s_lvl, s_dur = unpack(second)
 		for _, object in ipairs(core.get_objects_inside_radius(spell.pos, RADIUS)) do
 			if
 				object:is_player()
 				and mcl_siege.is_survival_player(object)
 				and self:line_of_sight(vector.offset(spell.pos, 0, 0.9, 0), mcl_util.target_eye_pos(object))
 			then
-				if mcl_potions.registered_effects and mcl_potions.registered_effects[first[1]] then
-					mcl_potions.give_effect_by_level(first[1], object, first[2], first[3])
+				if mcl_potions.registered_effects and mcl_potions.registered_effects[f_name] then
+					mcl_potions.give_effect_by_level(f_name, object, f_lvl, f_dur)
 				end
-				if second ~= first and mcl_potions.registered_effects and mcl_potions.registered_effects[second[1]] then
-					mcl_potions.give_effect_by_level(second[1], object, second[2], second[3])
+				if s_name ~= f_name and mcl_potions.registered_effects and mcl_potions.registered_effects[s_name] then
+					mcl_potions.give_effect_by_level(s_name, object, s_lvl, s_dur)
 				end
 				mcl_util.deal_damage(object, 4, { type = "magic", source = self.object, direct = self.object })
 			end
