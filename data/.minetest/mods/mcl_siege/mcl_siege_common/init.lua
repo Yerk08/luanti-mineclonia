@@ -52,3 +52,40 @@ function siege.rune(pos, radius, color, duration)
 		pos = pos, gain = 0.5, max_hear_distance = 16,
 	}, true)
 end
+
+-- Балансировка всех ночных врагов: ровные шансы и спавн группами
+local horde_roster = {
+	-- Основные отряды (равные веса, чтобы не было перекоса в зомби)
+	["mobs_mc:skeleton"]       = { weight = 100, min = 4, max = 8 },
+	["mobs_mc:stray"]          = { weight = 90,  min = 4, max = 8 },
+	["mobs_mc:bogged"]         = { weight = 90,  min = 4, max = 8 },
+	["mobs_mc:spider"]         = { weight = 95,  min = 4, max = 7 },
+	["mobs_mc:creeper"]        = { weight = 85,  min = 3, max = 6 },
+	["mobs_mc:pillager"]       = { weight = 65,  min = 4, max = 7 },
+
+	-- Элитные враги и «королевы» (ведьмы, эндермены, поборники) — теперь очень часто и группами
+	["mobs_mc:witch"]          = { weight = 65,  min = 2, max = 4 },
+	["mobs_mc:enderman"]       = { weight = 60,  min = 2, max = 5 },
+	["mobs_mc:vindicator"]     = { weight = 50,  min = 2, max = 4 },
+	["mobs_mc:evoker"]         = { weight = 35,  min = 1, max = 3 },
+	["mobs_mc:phantom"]        = { weight = 60,  min = 3, max = 6 },
+}
+
+core.register_on_mods_loaded(function()
+	for mob_name, cfg in pairs(horde_roster) do
+		siege.configure_spawns(mob_name, function(spawner)
+			spawner.weight = cfg.weight
+			spawner.pack_min = cfg.min
+			spawner.pack_max = cfg.max
+		end)
+	end
+
+	-- Увеличиваем общий лимит и частоту спавна мобов в Mineclonia, если доступно API
+	if mcl_mobs.spawn_setup then
+		-- Снижаем кулдаун спавна, чтобы группы появлялись заметно чаще
+		if type(mcl_mobs.spawning_interval) == "number" then
+			mcl_mobs.spawning_interval = math.min(mcl_mobs.spawning_interval, 5)
+		end
+	end
+end)
+
