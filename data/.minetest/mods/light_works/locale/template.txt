@@ -1,0 +1,7 @@
+# textdomain: light_works
+Light @1: @2 moves, @3 map blocks redrawn, @4 waiting, worst @5 ms (last second).=
+Show what Light Works is doing; "debug" reports the light's work each second.=
+Light Works debug lines on.=
+Light Works debug lines off.=
+Light Works stopped after an error; see debug.txt.=
+Light Works: @1 lights, @2 lit cells in @3 map blocks, @4 waiting, @5 to repair.=

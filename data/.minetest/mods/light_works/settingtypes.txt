@@ -1,0 +1,26 @@
+# Held lights light up the world around the player.
+light_works.enabled (Held lights) bool true
+
+# Lights held in the offhand count too.
+light_works.offhand (Offhand lights) bool true
+
+# Worn armor that gives light counts too (any piece with a light value, from any mod).
+light_works.armor (Glowing armor) bool true
+
+# A few items that are not blocks glow when held: lava bucket 14, blaze rod 10, glowstone
+# dust 8, magma cream 8. Minecraft itself does not do this; many dynamic-light mods do.
+light_works.glowing_items (Glowing items) bool true
+
+# The light follows the holder every server step while they move, so it keeps each
+# server's own pace. This is only a ceiling for servers with an unusually short step; at
+# normal step lengths (0.09 s, about 11 a second) it never applies.
+light_works.max_rate (Light moves per second, at most) float 15.0 1.0 30.0
+
+# Faint light levels at the edge (this level and below) may wait until something brighter
+# in the same map block changes, the area is left, or the holder stands still. Saves a
+# little work, but in deep darkness the waiting edge can be seen settling late.
+# 0 (default) writes every change at once.
+light_works.edge_tolerance (Faint edge levels that may wait) int 0 0 4
+
+# Held items with a weaker light than this do not light up the area.
+light_works.min_light (Weakest held light that lights up) int 1 1 14

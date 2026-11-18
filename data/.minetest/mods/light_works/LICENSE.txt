@@ -1,0 +1,22 @@
+Light Works - Luanti mod for Mineclonia
+
+To the extent possible under law, the author(s) have dedicated all
+copyright and related and neighboring rights to this mod to the public
+domain worldwide, under the Creative Commons CC0 1.0 Universal Public
+Domain Dedication. This mod is distributed without any warranty.
+
+You may use, copy, modify and redistribute it for any purpose, with or
+without credit. Credit is appreciated but not required.
+
+Full legal text:
+https://creativecommons.org/publicdomain/zero/1.0/legalcode
+
+Credits
+
+Made for Mineclonia and Luanti, with thanks to the Mineclonia and Luanti
+developers whose work this builds on.
+
+Designed, tested and maintained by Legacy_Tall_Grass. The code was made
+with AI assistance: Claude (Anthropic), model Claude Opus 5.5, used through
+claude.ai. No Mineclonia code was copied: the mod only reads items and
+writes light values through the Luanti API.

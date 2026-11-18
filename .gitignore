@@ -16,6 +16,7 @@
 **/worlds/*/force_loaded.txt
 **/worlds/*/ipban.txt
 **/worlds/*/mcl_maps/
+**/worlds/*/sharp_map/
 
 # Вложенные git-репозитории внутри модов
 **/mods/**/.git/

@@ -12,4 +12,4 @@ load_mod_mcl_extra_structures = true
 load_mod_mcl_fish_traps = true
 load_mod_mcl_morefood = true
 load_mod_mcl_random_plant_positions = true
-load_mod_mcl_wieldlight = true
+load_mod_light_works = true
