@@ -53,19 +53,19 @@ function siege.rune(pos, radius, color, duration)
 	}, true)
 end
 
--- Балансировка всех ночных врагов: ровные шансы и спавн группами
+-- Крупные отряды и высокий вес спавна для всех врагов
 local horde_roster = {
-	["mobs_mc:zombie"]         = { weight = 160, min = 3, max = 7 },
-	["mobs_mc:husk"]           = { weight = 140, min = 3, max = 7 },
-	["mobs_mc:skeleton"]       = { weight = 100, min = 3, max = 6 },
-	["mobs_mc:stray"]          = { weight = 85,  min = 3, max = 6 },
-	["mobs_mc:bogged"]         = { weight = 85,  min = 3, max = 6 },
-	["mobs_mc:spider"]         = { weight = 90,  min = 3, max = 6 },
-	["mobs_mc:pillager"]       = { weight = 45,  min = 3, max = 5 },
-	["mobs_mc:enderman"]       = { weight = 40,  min = 1, max = 3 },
-	["mobs_mc:vindicator"]     = { weight = 30,  min = 2, max = 3 },
-	["mobs_mc:evoker"]         = { weight = 18,  min = 1, max = 2 },
-	["mobs_mc:phantom"]        = { weight = 45,  min = 2, max = 4 },
+	["mobs_mc:zombie"]         = { weight = 240, min = 6, max = 14 },
+	["mobs_mc:husk"]           = { weight = 200, min = 6, max = 12 },
+	["mobs_mc:skeleton"]       = { weight = 140, min = 4, max = 9 },
+	["mobs_mc:stray"]          = { weight = 120, min = 4, max = 9 },
+	["mobs_mc:bogged"]         = { weight = 120, min = 4, max = 9 },
+	["mobs_mc:spider"]         = { weight = 130, min = 4, max = 8 },
+	["mobs_mc:pillager"]       = { weight = 80,  min = 4, max = 8 },
+	["mobs_mc:enderman"]       = { weight = 55,  min = 2, max = 4 },
+	["mobs_mc:vindicator"]     = { weight = 55,  min = 3, max = 6 },
+	["mobs_mc:evoker"]         = { weight = 30,  min = 1, max = 3 },
+	["mobs_mc:phantom"]        = { weight = 70,  min = 3, max = 6 },
 }
 
 core.register_on_mods_loaded(function()
@@ -74,15 +74,22 @@ core.register_on_mods_loaded(function()
 			spawner.weight = cfg.weight
 			spawner.pack_min = cfg.min
 			spawner.pack_max = cfg.max
+			-- Снимаем жесткие лимиты на плотность конкретно этого моба в чанке
+			if spawner.max_spawn then
+				spawner.max_spawn = math.max(spawner.max_spawn * 3, 24)
+			end
 		end)
 	end
 
-	-- Увеличиваем общий лимит и частоту спавна мобов в Mineclonia, если доступно API
-	if mcl_mobs.spawn_setup then
-		-- Снижаем кулдаун спавна, чтобы группы появлялись заметно чаще
-		if type(mcl_mobs.spawning_interval) == "number" then
-			mcl_mobs.spawning_interval = math.min(mcl_mobs.spawning_interval, 5)
-		end
+	-- Форсируем глобальные лимиты и скорость спавна Mineclonia
+	if type(mcl_mobs.spawning_interval) == "number" then
+		mcl_mobs.spawning_interval = 2 -- Спавн каждые 2 секунды вместо 5+
+	end
+	if type(mcl_mobs.max_mobs_per_player) == "number" then
+		mcl_mobs.max_mobs_per_player = math.max(mcl_mobs.max_mobs_per_player, 90)
+	end
+	if type(mcl_mobs.mob_cap) == "table" then
+		mcl_mobs.mob_cap.monster = math.max(mcl_mobs.mob_cap.monster or 70, 140)
 	end
 end)
 

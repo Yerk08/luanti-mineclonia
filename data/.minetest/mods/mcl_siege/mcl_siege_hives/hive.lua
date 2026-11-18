@@ -791,16 +791,10 @@ local function part_heart(pos)
 	return nil, false
 end
 local function apply_short_effect(player, name, level, duration)
-	if not mcl_potions.registered_effects or not mcl_potions.registered_effects[name] then
+	if not mcl_potions or not mcl_potions.registered_effects or not mcl_potions.registered_effects[name] then
 		return
 	end
-	apply_short_effect(player, name, level, duration)
-
-	core.after(duration, function()
-		if player and player:is_valid() and mcl_potions.clear_effect then
-			mcl_potions.clear_effect(player, name)
-		end
-	end)
+	mcl_potions.give_effect(name, player, level, duration)
 end
 local function trap_tick(pos)
 	local heart, unloaded = part_heart(pos)

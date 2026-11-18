@@ -10,17 +10,18 @@ local LOCAL_LIMIT = 16 -- Лимит разрушенных блоков в ра
 local GLOBAL_LIMIT = 64 -- Общий лимит разрушений
 local MAX_BLOCKS_PER_ZOMBIE = 12 -- Сколько блоков может пробить один зомби
 
+-- В начале файла меняем настройки отрядов зомби:
 local function configure_horde(spawner)
-	spawner.weight = (spawner.biomes[1] == "Desert") and 30 or 160
-	spawner.pack_min = 3
-	spawner.pack_max = 7
+	spawner.weight = (spawner.biomes[1] == "Desert") and 120 or 240
+	spawner.pack_min = 6
+	spawner.pack_max = 14
 end
 
 core.register_on_mods_loaded(function()
 	mcl_siege.configure_spawns("mobs_mc:zombie", configure_horde)
 	mcl_siege.configure_spawns("mobs_mc:husk", function(spawner)
 		configure_horde(spawner)
-		spawner.weight = 140
+		spawner.weight = 220
 	end)
 end)
 
@@ -206,16 +207,16 @@ local function installed_reinforcement_limit(original)
 			return false
 		end
 		local count = 0
-		for _, object in ipairs(core.get_objects_inside_radius(self.object:get_pos(), 28)) do
+		for _, object in ipairs(core.get_objects_inside_radius(self.object:get_pos(), 36)) do
 			local entity = object:get_luaentity()
 			if entity and entity.is_mob and entity._reinforcement_type and not entity.dead then
 				count = count + 1
-				if count >= 18 then
+				if count >= 45 then -- Было 18: теперь толпа может разрастаться до 45 подкреплений
 					return false
 				end
 			end
 		end
-		reinforcement_after = now + 5
+		reinforcement_after = now + 1.5 -- Было 5: зомби вызывают подмогу чаще
 		return true
 	end
 end
@@ -233,7 +234,8 @@ for _, kind in ipairs({ "zombie", "baby_zombie", "husk", "baby_husk" }) do
 		def.can_spawn_reinforcements = installed_reinforcement_limit(def.can_spawn_reinforcements)
 		if siege_enabled then
 			local rules = table.copy(def._targeting_rules)
-			rules[2] = mcl_mobs.build_nearest_target_rule("player", nil, nil, nil, 24)
+			-- Увеличили дистанцию агра с 24 до 40 блоков, чтобы весь отряд шел на игрока
+			rules[2] = mcl_mobs.build_nearest_target_rule("player", nil, nil, nil, 40)
 			def._targeting_rules = rules
 			def.attack_melee = attack_melee
 			local old_attack_end = def.attack_end
@@ -244,3 +246,4 @@ for _, kind in ipairs({ "zombie", "baby_zombie", "husk", "baby_husk" }) do
 		end
 	end
 end
+
