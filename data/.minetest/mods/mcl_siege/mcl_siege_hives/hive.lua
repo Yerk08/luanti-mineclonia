@@ -30,11 +30,11 @@ local soft_shell_groups = {
 
 -- Экспоненциальное замедление скорости роста по фазам
 local function get_step_interval(phase)
-	return 0.03 * (1 ^ (phase - 1)) -- 0.03s -> 0.06s -> 0.12s -> 0.24s -> 0.48s
+	return 0.03 * (2 ^ (phase - 1)) -- 0.03s -> 0.06s -> 0.12s -> 0.24s -> 0.48s
 end
 
 local function get_phase_pause(phase)
-	return 0.5 * (2 ^ (phase - 1)) -- 0.5s -> 1.5s -> 4.5s -> 13.5s -> 40.5s
+	return 0.5 * (3 ^ (phase - 1)) -- 0.5s -> 1.5s -> 4.5s -> 13.5s -> 40.5s
 end
 
 local function cell_key(x, z)
