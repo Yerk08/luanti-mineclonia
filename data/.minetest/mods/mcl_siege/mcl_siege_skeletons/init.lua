@@ -32,27 +32,20 @@ local function spawn_dash_dust(pos)
 	})
 end
 
--- Дополнительный быстрый выстрел для плотного подавляющего огня
+-- Дополнительный быстрый выстрел через штатный API mcl_bows (без краша raycast)
 local function fire_bonus_arrow(self, pos, target_pos)
-	local arrow_entity = self.arrow or "mobs_mc:arrow"
 	local start_pos = vector.offset(pos, 0, 1.45, 0)
-	local dir = vector.direction(start_pos, vector.offset(target_pos, 0, 1.1, 0))
-	-- Небольшой разброс, чтобы отряд накрывал площадь
+	local aim_pos = vector.offset(target_pos, 0, 1.1, 0)
+	local dir = vector.direction(start_pos, aim_pos)
+
+	-- Небольшой разброс для подавляющего огня
 	dir.x = dir.x + (math.random() - 0.5) * 0.14
 	dir.y = dir.y + (math.random() - 0.5) * 0.08 + 0.04
 	dir.z = dir.z + (math.random() - 0.5) * 0.14
 	dir = vector.normalize(dir)
 
-	local obj = core.add_entity(vector.add(start_pos, vector.multiply(dir, 0.8)), arrow_entity)
-	if obj then
-		local ent = obj:get_luaentity()
-		if ent then
-			ent._shooter = self.object
-			ent._source_object = self.object
-		end
-		local speed = 26
-		obj:set_velocity(vector.multiply(dir, speed))
-		obj:set_acceleration({ x = 0, y = -9.81, z = 0 })
+	if mcl_bows and mcl_bows.shoot_arrow then
+		mcl_bows.shoot_arrow("mcl_bows:arrow", start_pos, dir, self.object:get_yaw(), self.object, 0.7, 2)
 		core.sound_play("mobs_mc_bow_shoot", {
 			pos = pos, gain = 0.7, pitch = math.random(95, 115) / 100, max_hear_distance = 24,
 		}, true)

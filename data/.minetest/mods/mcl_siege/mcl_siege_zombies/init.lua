@@ -189,7 +189,15 @@ end
 local function installed_reinforcement_limit(original)
 	return function(self, reason)
 		local now = core.get_gametime()
-		if now = 18 then
+		if not (now >= reinforcement_after) or not original(self, reason) then
+			return false
+		end
+		local count = 0
+		for _, object in ipairs(core.get_objects_inside_radius(self.object:get_pos(), 28)) do
+			local entity = object:get_luaentity()
+			if entity and entity.is_mob and entity._reinforcement_type and not entity.dead then
+				count = count + 1
+				if count >= 18 then
 					return false
 				end
 			end

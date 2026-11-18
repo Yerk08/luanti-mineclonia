@@ -5,13 +5,19 @@ return function(hive)
 	local mob = mcl_mobs.mob_class
 	local combat = setmetatable({}, { __mode = "k" })
 	local CHECK_SITES = {
-		{ 2, 0 }, { 0, 2 }, { -2, 0 }, { 0, -2 },
-		{ 3, 3 }, { -3, 3 }, { -3, -3 }, { 3, -3 }, { 0, 0 },
+		{ 2, 0 },
+		{ 0, 2 },
+		{ -2, 0 },
+		{ 0, -2 },
+		{ 3, 3 },
+		{ -3, 3 },
+		{ -3, -3 },
+		{ 3, -3 },
+		{ 0, 0 },
 	}
 	local WARNING, RADIUS = 1.5, 4.0
 	local names = { modname .. ":vespera", modname .. ":kharza" }
 
-	-- Пул случайных эффектов для заклинаний королевы
 	local queen_curses = {
 		{ "darkness", 1, 4.0 },
 		{ "weakness", 1, 5.0 },
@@ -22,7 +28,6 @@ return function(hive)
 		{ "mining_fatigue", 2, 6.0 },
 	}
 
-	-- Регистрация снаряда кислоты для королев
 	local acid_entity = modname .. ":acid_spit"
 	core.register_entity(acid_entity, {
 		initial_properties = {
@@ -62,7 +67,10 @@ return function(hive)
 					mcl_potions.give_effect_by_level("poison", obj, 1, 3.5)
 					mcl_potions.give_effect_by_level("slowness", obj, 1, 2.5)
 					core.sound_play("default_cool_lava", {
-						pos = pos, gain = 0.6, pitch = 1.3, max_hear_distance = 16,
+						pos = pos,
+						gain = 0.6,
+						pitch = 1.3,
+						max_hear_distance = 16,
 					}, true)
 					self.object:remove()
 					return
@@ -73,7 +81,10 @@ return function(hive)
 			local def = core.registered_nodes[node.name]
 			if def and def.walkable then
 				core.sound_play("default_cool_lava", {
-					pos = pos, gain = 0.5, pitch = 1.5, max_hear_distance = 16,
+					pos = pos,
+					gain = 0.5,
+					pitch = 1.5,
+					max_hear_distance = 16,
 				}, true)
 				self.object:remove()
 			end
@@ -93,8 +104,37 @@ return function(hive)
 			obj:set_velocity(vector.multiply(dir, 18))
 			obj:set_acceleration({ x = 0, y = -6.5, z = 0 })
 			core.sound_play("mobs_mc_spider_attack", {
-				pos = pos, gain = 0.85, pitch = 1.35, max_hear_distance = 22,
+				pos = pos,
+				gain = 0.85,
+				pitch = 1.35,
+				max_hear_distance = 22,
 			}, true)
+		end
+	end
+
+	-- Вызволение королевы, если растущий кокон накрыл её блоками
+	local function unstuck_from_blocks(self, pos)
+		local check_pos = vector.round(vector.offset(pos, 0, 0.5, 0))
+		local node = core.get_node(check_pos)
+		local def = core.registered_nodes[node.name]
+		if not def or not def.walkable then
+			return
+		end
+		-- Ищем ближайшую свободную клетку по горизонтали или вверх
+		for dy = 0, 4 do
+			for dx = -2, 2 do
+				for dz = -2, 2 do
+					local candidate = vector.offset(check_pos, dx, dy, dz)
+					if mcl_siege.standable(candidate, 2) then
+						self.object:set_pos(vector.offset(candidate, 0, -0.4, 0))
+						return
+					end
+				end
+			end
+		end
+		-- Запасной вариант: возвращаем прямо к сердцу улья
+		if self._siege_heart then
+			self.object:set_pos(vector.offset(self._siege_heart, 0, 0.6, 0))
 		end
 	end
 
@@ -104,7 +144,6 @@ return function(hive)
 			storage:set_int("queen_serial", serial)
 			self._siege_queen_id = tostring(serial)
 		end
-		-- Скрываем имя над головой, чтобы королева не выдавала себя заранее
 		self.nametag = ""
 		if self.object then
 			self.object:set_nametag_attributes({ text = "" })
@@ -126,7 +165,9 @@ return function(hive)
 				self._siege_heart = candidate
 				self:restrict_to(candidate, 26)
 				core.sound_play("mobs_mc_spider_attack", {
-					pos = candidate, gain = 1, max_hear_distance = 28,
+					pos = candidate,
+					gain = 1,
+					max_hear_distance = 28,
 				}, true)
 				return
 			end
@@ -135,10 +176,17 @@ return function(hive)
 
 	local function ai_step(self, dtime)
 		mob.ai_step(self, dtime)
+		local pos = self.object:get_pos()
+		if not pos then
+			return
+		end
+		-- Проверяем застревание раз в секунду
+		if self:check_timer("siege_unstuck", 1.0) then
+			unstuck_from_blocks(self, pos)
+		end
 		if mcl_vars.difficulty == 0 or not self:check_timer("siege_hive", 4) then
 			return
 		end
-		local pos = self.object:get_pos()
 		local anchor = self._siege_heart
 		if not anchor then
 			try_found(self, pos)
@@ -147,18 +195,19 @@ return function(hive)
 		end
 	end
 
-	-- Магический импульс накладывает 2 случайных эффекта из пула
 	local function pulse(self, spell)
 		local first = queen_curses[math.random(#queen_curses)]
 		local second = queen_curses[math.random(#queen_curses)]
 		for _, object in ipairs(core.get_objects_inside_radius(spell.pos, RADIUS)) do
-			if object:is_player() and mcl_siege.is_survival_player(object)
-				and self:line_of_sight(vector.offset(spell.pos, 0, 0.9, 0), mcl_util.target_eye_pos(object)) then
+			if
+				object:is_player()
+				and mcl_siege.is_survival_player(object)
+				and self:line_of_sight(vector.offset(spell.pos, 0, 0.9, 0), mcl_util.target_eye_pos(object))
+			then
 				if mcl_potions.registered_effects and mcl_potions.registered_effects[first[1]] then
 					mcl_potions.give_effect_by_level(first[1], object, first[2], first[3])
 				end
-				if second ~= first and mcl_potions.registered_effects
-					and mcl_potions.registered_effects[second[1]] then
+				if second ~= first and mcl_potions.registered_effects and mcl_potions.registered_effects[second[1]] then
 					mcl_potions.give_effect_by_level(second[1], object, second[2], second[3])
 				end
 				mcl_util.deal_damage(object, 4, { type = "magic", source = self.object, direct = self.object })
@@ -193,14 +242,12 @@ return function(hive)
 
 		local distance = vector.distance(pos, target_pos)
 
-		-- Плевок кислотой на средней дистанции (от 3.5 до 16 блоков)
 		if state.spit_cd <= 0 and visible and distance >= 3.5 and distance <= 16 then
 			state.spit_cd = math.random(3, 5)
 			self:look_at(target_pos)
 			spit_acid(self, pos, target_pos)
 		end
 
-		-- Руническое заклинание со случайными эффектами
 		if state.cooldown <= 0 and visible and distance <= 13 then
 			state.spell = { pos = target_pos, remaining = WARNING }
 			state.cooldown = self.health <= self.initial_properties.hp_max / 2 and 7.5 or 10.5
@@ -237,7 +284,8 @@ return function(hive)
 			hp_max = health,
 			xp_min = 36,
 			xp_max = 48,
-			collisionbox = { -0.8, 0, -0.8, 0.8, 1.35, 0.8 },
+			-- Компактный хитбокс, чтобы королева не застревала в коридорах улья
+			collisionbox = { -0.55, 0, -0.55, 0.55, 1.25, 0.55 },
 			visual = "mesh",
 			mesh = "mobs_mc_spider.b3d",
 			textures = { { "mobs_mc_spider.png^[colorize:" .. color .. ":115" } },
@@ -245,6 +293,8 @@ return function(hive)
 			makes_footstep_sound = true,
 			head_eye_height = 0.95,
 			can_despawn = false,
+			suffocation = false, -- Отключаем урон и звуки боли от застревания в стенах
+			spider_climb = true, -- Умеет карабкаться по стенам улья
 			movement_speed = speed,
 			damage = 7,
 			reach = 2.8,
@@ -261,8 +311,12 @@ return function(hive)
 				distance = 24,
 			},
 			animation = {
-				stand_start = 20, stand_end = 40, stand_speed = 9,
-				walk_start = 0, walk_end = 20, walk_speed = 22,
+				stand_start = 20,
+				stand_end = 40,
+				stand_speed = 9,
+				walk_start = 0,
+				walk_end = 20,
+				walk_speed = 22,
 			},
 			drops = {
 				{ name = "mcl_core:diamond", min = 2, max = 3, chance = 1 },
@@ -279,13 +333,18 @@ return function(hive)
 			ai_step = ai_step,
 			attack_melee = attack_melee,
 			attack_end = attack_end,
+			receive_damage = function(self, reason, damage)
+				-- Полностью игнорируем урон от удушья в блоках (suffocation)
+				if reason and reason.type == "suffocation" then
+					return 0
+				end
+				return mob.receive_damage(self, reason, damage)
+			end,
 		})
 		mcl_mobs.register_egg(name, description, color, "#211324", 0)
 	end
-
 	register_queen(names[1], S("Vespera, Queen of Dusk"), "#A751E1", 120, 4.1, "darkness")
 	register_queen(names[2], S("Kharza, Queen of Embers"), "#E64D40", 145, 4.55, "weakness")
-
 	local base = mobs_mc.monster_spawner
 	local queen_spawner = table.merge(base, {
 		name = names[1],
@@ -293,19 +352,28 @@ return function(hive)
 		pack_min = 1,
 		pack_max = 1,
 		biomes = {
-			"Plains", "SunflowerPlains", "Savannah", "Meadow", "Desert",
-			"SnowyPlains", "Forest", "BirchForest", "SparseJungle", "Taiga", "Swamp",
+			"Plains",
+			"SunflowerPlains",
+			"Savannah",
+			"Meadow",
+			"Desert",
+			"SnowyPlains",
+			"Forest",
+			"BirchForest",
+			"SparseJungle",
+			"Taiga",
+			"Swamp",
 		},
 	})
-
 	function queen_spawner:test_spawn_position(spawn_pos, node_pos, data, cache, spawn_flag)
-		return not spawn_flag and hive.natural_ready()
+		return not spawn_flag
+			and hive.natural_ready()
 			and mcl_worlds.pos_to_dimension(node_pos) == "overworld"
 			and base.test_spawn_position(self, spawn_pos, node_pos, data, cache, spawn_flag)
 			and mcl_weather.is_outdoor(node_pos)
-			and hive.site_available(node_pos) and hive.can_found(node_pos)
-		end
-	
+			and hive.site_available(node_pos)
+			and hive.can_found(node_pos)
+	end
 	function queen_spawner:spawn(pos)
 		local object = core.add_entity(pos, names[math.random(#names)])
 		if object and object:is_valid() then
@@ -313,6 +381,5 @@ return function(hive)
 		end
 		return object
 	end
-
 	mcl_mobs.register_spawner(queen_spawner)
 end

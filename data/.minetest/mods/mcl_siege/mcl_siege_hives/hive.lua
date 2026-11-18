@@ -12,30 +12,21 @@ local ACID = prefix .. "acid"
 local NEST = prefix .. "nest"
 local CACHE = prefix .. "cache"
 
-local CELL_SIZE = 96
-local MIN_SPACING = 96
-local MAX_PHASE = 4
-local STEP_INTERVAL = 0.08 -- Быстрая анимация перестройки по блокам
-local PHASE_PAUSE = 18 -- Пауза между циклами роста/перестройки
+local CELL_SIZE = 128
+local MIN_SPACING = 112
+-- Размеры радиуса по фазам: 7 -> 20 -> 40 блоков
+local PHASE_RADII = { 7, 20, 40 }
+local MAX_PHASE = #PHASE_RADII
+local STEP_INTERVAL = 0.08 -- Быстрая пошаговая анимация перестройки
+local PHASE_PAUSE = 22 -- Пауза между циклами перестройки
 local CARDINAL = { { 1, 0 }, { 0, 1 }, { -1, 0 }, { 0, -1 } }
 
 local block_groups = { pickaxey = 1, opaque = 1, not_in_creative_inventory = 1 }
-local HIVE_NODES = {
-	[RIB] = true,
-	[SLIME] = true,
-	[SHELL] = true,
-	[WEB] = true,
-	[TRAP] = true,
-	[ACID] = true,
-	[NEST] = true,
-	[CACHE] = true,
-}
 
 local function cell_key(x, z)
 	return ("hive_%d_%d"):format(x, z)
 end
 
--- Разрешаем ставить коконы чаще и ближе друг к другу (чтобы они могли сливаться)
 function hive.site_available(pos)
 	local x, z = math.floor(pos.x / CELL_SIZE), math.floor(pos.z / CELL_SIZE)
 	if storage:contains(cell_key(x, z)) then
@@ -60,7 +51,6 @@ function hive.natural_ready()
 end
 
 function hive.remember_natural_spawn()
-	-- Королевы и их коконы появляются заметно чаще (раз в 8 минут вместо часа)
 	storage:set_int("next_queen", core.get_gametime() + 480)
 end
 
@@ -95,9 +85,14 @@ local function player_near(pos, radius)
 	end
 end
 
+-- Проверяем, нет ли в клетке игрока ИЛИ моба (чтобы не замуровывать королеву и охрану)
 local function occupied(pos, radius)
-	for _, object in ipairs(core.get_objects_inside_radius(pos, radius + 1.2)) do
+	for _, object in ipairs(core.get_objects_inside_radius(pos, radius + 1.4)) do
 		if object:is_player() then
+			return true
+		end
+		local ent = object:get_luaentity()
+		if ent and ent.is_mob then
 			return true
 		end
 	end
@@ -123,7 +118,6 @@ function hive.can_found(pos)
 	return true
 end
 
--- Можно ли поглотить/разрушить блок при росте кокона
 local function can_consume_node(pos, heart_pos)
 	if vector.equals(pos, heart_pos) then
 		return false
@@ -137,7 +131,6 @@ local function can_consume_node(pos, heart_pos)
 	if not def or core.get_item_group(name, "unbreakable") > 0 or def.can_dig == false then
 		return false
 	end
-	-- Если поглощаем сердце чужого улья — запечатываем его (слияние коконов)
 	if name == HEART then
 		local other_meta = core.get_meta(pos)
 		local other_id = other_meta:get_string("hive_id")
@@ -148,28 +141,28 @@ local function can_consume_node(pos, heart_pos)
 	return true
 end
 
--- Генератор микро-кокона внутри основного улья
+-- Просторный микро-кокон с широкими входами 3x3 и испытаниями внутри
 local function build_micro_cocoon(grid, cx, cy, cz, rx, ry, rz, seed, index)
 	local function set_cell(x, y, z, mat)
-		local key = x .. ":" .. y .. ":" .. z
-		if grid[key] ~= HEART then
-			grid[key] = mat
+		if x == 0 and y == 0 and z == 0 then
+			return
 		end
+		grid[x .. ":" .. y .. ":" .. z] = mat
 	end
 
 	for dx = -rx, rx do
-		for dy = -ry, ry do
+		for dy = -1, ry do
 			for dz = -rz, rz do
-				local norm = (dx / rx) ^ 2 + (dy / ry) ^ 2 + (dz / rz) ^ 2
+				local y_norm = dy < 0 and 1.5 or ry
+				local norm = (dx / rx) ^ 2 + (dy / y_norm) ^ 2 + (dz / rz) ^ 2
 				local wx, wy, wz = cx + dx, cy + dy, cz + dz
 				if norm <= 1.0 then
-					if norm >= 0.68 then
-						-- Оболочка микро-кокона: смесь слизи и хитина с зазубринами
+					if dy == -1 then
+						set_cell(wx, wy, wz, SLIME)
+					elseif norm >= 0.74 then
 						local hash = (wx * 17 + wy * 31 + wz * 13 + seed) % 7
-						local mat = (hash <= 2) and SLIME or RIB
-						set_cell(wx, wy, wz, mat)
+						set_cell(wx, wy, wz, (hash <= 2) and SLIME or RIB)
 					else
-						-- Полость внутри микро-кокона
 						set_cell(wx, wy, wz, "air")
 					end
 				end
@@ -177,39 +170,44 @@ local function build_micro_cocoon(grid, cx, cy, cz, rx, ry, rz, seed, index)
 		end
 	end
 
-	-- Пробиваем 2 входа в микро-кокон, чтобы в нём можно было петлять
+	-- Широкие сквозные арки (3x3), чтобы свободно проходить и сражаться внутри
 	for step = -rx - 1, rx + 1 do
-		set_cell(cx + step, cy, cz, "air")
-		set_cell(cx + step, cy + 1, cz, "air")
+		for w = -1, 1 do
+			for h = 0, 2 do
+				set_cell(cx + step, cy + h, cz + w, "air")
+			end
+		end
 	end
 	for step = -rz - 1, rz + 1 do
-		set_cell(cx, cy, cz + step, "air")
-		set_cell(cx, cy + 1, cz + step, "air")
+		for w = -1, 1 do
+			for h = 0, 2 do
+				set_cell(cx + w, cy + h, cz + step, "air")
+			end
+		end
 	end
 
-	-- Пол микро-кокона и испытания внутри
-	set_cell(cx, cy - 1, cz, SLIME)
+	-- Испытания и лут по углам микро-кокона (центр прохода остаётся свободным)
 	if index % 2 == 1 then
-		set_cell(cx, cy, cz, TRAP)
-		set_cell(cx + 1, cy, cz + 1, ACID)
+		set_cell(cx + 2, cy, cz + 2, TRAP)
+		set_cell(cx - 2, cy, cz - 2, ACID)
 	else
-		set_cell(cx, cy, cz, ACID)
-		set_cell(cx - 1, cy, cz - 1, WEB)
+		set_cell(cx - 2, cy, cz + 2, ACID)
+		set_cell(cx + 2, cy, cz - 2, TRAP)
 	end
 
-	if index <= 3 then
-		set_cell(cx + 1, cy, cz - 1, NEST)
+	if index % 3 ~= 0 then
+		set_cell(cx + 2, cy, cz - 2, NEST)
 	end
-	if index == 2 or index == 4 then
-		set_cell(cx - 1, cy, cz + 1, CACHE)
+	if index % 2 == 0 then
+		set_cell(cx - 2, cy, cz - 2, CACHE)
 	end
 end
 
--- Генератор большого многослойного кокона с лабиринтом и микро-коконами для заданной фазы (1..MAX_PHASE)
+-- Генератор гигантского просторного кокона (радиусы 7 -> 20 -> 40)
 local function generate_cocoon_plan(phase, seed)
-	local rx = 6 + phase * 2 -- От 8 до 14 блоков по X
-	local rz = 6 + phase * 2 -- От 8 до 14 блоков по Z
-	local ry = 4 + phase -- От 5 до 8 блоков по Y (ограниченный размер)
+	local rx = PHASE_RADII[phase] or 7
+	local rz = rx
+	local ry = math.max(5, math.floor(rx * 0.45)) -- Высокий свод (от 5 до 18 блоков вверх)
 	local grid = {}
 
 	local function set_cell(x, y, z, mat)
@@ -219,46 +217,39 @@ local function generate_cocoon_plan(phase, seed)
 		grid[x .. ":" .. y .. ":" .. z] = mat
 	end
 
-	-- 1. Внешний купол кокона и слоистая структура (слизь у ядра, хитин в центре, панцирь снаружи)
+	-- 1. Внешний купол, ровный пол и просторное внутреннее пространство с редкими колоннами
 	for dx = -rx, rx do
-		for dy = -2, ry do
+		for dy = -1, ry do
 			for dz = -rz, rz do
-				local y_scale = dy < 0 and 2.5 or ry
+				local y_scale = dy < 0 and 1.5 or ry
 				local dist_sq = (dx / rx) ^ 2 + (dy / y_scale) ^ 2 + (dz / rz) ^ 2
-				local radial = math.sqrt(dx * dx + dy * dy + dz * dz)
+				local radial = math.sqrt(dx * dx + dz * dz)
 
 				if dist_sq <= 1.0 then
-					if dist_sq >= 0.78 then
-						-- Внешняя броня кокона с редкими «порами» паутины
-						local pore = ((dx * 7 + dy * 13 + dz * 19 + seed) % 11 == 0)
+					-- Тонкая прочная внешняя оболочка (только самый край купола)
+					local is_shell = dist_sq >= (rx <= 8 and 0.72 or 0.88)
+
+					if dy == -1 then
+						-- Пол: слизь у центра, хитин дальше
+						set_cell(dx, dy, dz, (radial <= rx * 0.35) and SLIME or RIB)
+					elseif is_shell then
+						local pore = ((dx * 7 + dy * 13 + dz * 19 + seed) % 19 == 0)
 						set_cell(dx, dy, dz, pore and WEB or SHELL)
-					elseif radial <= 3.6 then
-						-- Ближе к центру (ядру) — живая пульсирующая слизь
-						if radial <= 2.2 and dy >= 0 then
-							set_cell(dx, dy, dz, "air")
-						else
-							set_cell(dx, dy, dz, SLIME)
-						end
 					else
-						-- Внутренний объём: запутанный лабиринт из перегородок и паутины
-						if dy == -1 then
-							set_cell(dx, dy, dz, (radial < 5.5) and SLIME or RIB)
-						elseif dy >= 0 and dy <= 2 then
-							local maze_wall = (
-								(math.abs(dx) % 3 == 0 and math.abs(dz) % 2 == 1)
-								or (math.abs(dz) % 3 == 0 and math.abs(dx) % 2 == 1)
-							)
-							local doorway = ((dx + dz + seed) % 4 == 0)
-							if maze_wall and not doorway then
-								set_cell(dx, dy, dz, (radial < 5.5) and SLIME or RIB)
-							else
-								local web_chance = ((dx * 5 + dz * 9 + dy * 3 + seed) % 13 == 0)
-								set_cell(dx, dy, dz, web_chance and WEB or "air")
-							end
-						else
-							-- Свод потолка с висящей паутиной
-							local hang = ((dx * 3 + dz * 7 + seed) % 9 == 0)
+						-- Внутри — высокий свод. Ставим только редкие арки-колонны для ориентира, чтобы не мешали ходить
+						local is_pillar = (radial > 5.5)
+							and (math.abs(dx) % 9 == 4)
+							and (math.abs(dz) % 9 == 4)
+							and (dy <= ry - 2)
+
+						if is_pillar then
+							set_cell(dx, dy, dz, (radial <= rx * 0.4) and SLIME or RIB)
+						elseif dy >= ry - 2 then
+							-- Редкие нити паутины под самым потолком (не мешают ходьбе)
+							local hang = ((dx * 5 + dz * 11 + seed) % 17 == 0)
 							set_cell(dx, dy, dz, hang and WEB or "air")
+						else
+							set_cell(dx, dy, dz, "air")
 						end
 					end
 				end
@@ -266,49 +257,65 @@ local function generate_cocoon_plan(phase, seed)
 		end
 	end
 
-	-- 2. Четыре главных запутанных туннеля-входа с изгибами (чтобы игрок легко плутал)
+	-- 2. Четыре широких (5x4) изогнутых галереи-входа, чтобы удобно заходить и бегать
 	for i, dir in ipairs(CARDINAL) do
 		local ux, uz = dir[1], dir[2]
 		local px, pz = -uz, ux
-		local shift = (i % 2 == 0) and 1 or -1
-		for step = 2, rx + 1 do
-			local bend = (step > 5) and shift or 0
+		local shift = (i % 2 == 0) and 2 or -2
+		for step = 2, rx + 2 do
+			local bend = (step > math.floor(rx * 0.45)) and shift or 0
 			local cx = ux * step + px * bend
 			local cz = uz * step + pz * bend
-			for w = -1, 1 do
+			for w = -2, 2 do
 				local tx = cx + px * w
 				local tz = cz + pz * w
-				set_cell(tx, -1, tz, (step <= 4) and SLIME or RIB)
-				set_cell(tx, 0, tz, "air")
-				set_cell(tx, 1, tz, "air")
-				if w == 0 then
-					set_cell(tx, 2, tz, "air")
+				set_cell(tx, -1, tz, (step <= 5) and SLIME or RIB)
+				for h = 0, 3 do
+					if math.abs(w) < 2 or h < 3 then
+						set_cell(tx, h, tz, "air")
+					end
 				end
 			end
 		end
 	end
 
-	-- 3. Внутренние микро-коконы с испытаниями (начиная со 2-й фазы роста)
+	-- 3. Внутренние микро-коконы с испытаниями (появляются на радиусах 20 и 40)
 	if phase >= 2 then
-		local offset = math.floor(rx * 0.52)
-		local micro_coords = {
-			{ offset, 0, offset },
-			{ -offset, 0, offset },
-			{ -offset, 0, -offset },
-			{ offset, 0, -offset },
+		local r1 = math.floor(rx * 0.48)
+		local inner_coords = {
+			{ r1, 0, r1 },
+			{ -r1, 0, r1 },
+			{ -r1, 0, -r1 },
+			{ r1, 0, -r1 },
 		}
-		for idx, mc in ipairs(micro_coords) do
-			build_micro_cocoon(grid, mc[1], mc[2], mc[3], 3, 2, 3, seed + idx * 19, idx)
+		for idx, mc in ipairs(inner_coords) do
+			build_micro_cocoon(grid, mc[1], mc[2], mc[3], 4, 3, 4, seed + idx * 19, idx)
 		end
-	else
-		-- В первой фазе ставим базовые испытания вокруг центрального зала
-		set_cell(3, 0, 0, TRAP)
-		set_cell(-3, 0, 0, ACID)
-		set_cell(0, 0, 3, NEST)
-		set_cell(0, 0, -3, CACHE)
 	end
 
-	-- 4. Сортируем блоки по расстоянию от ядра (от центра наружу) для плавной анимации роста
+	if phase >= 3 then
+		-- На максимальном радиусе (40) добавляем ещё 4 крупных микро-кокона по кардинальным осям
+		local r2 = math.floor(rx * 0.68)
+		local outer_coords = {
+			{ r2, 0, 0 },
+			{ -r2, 0, 0 },
+			{ 0, 0, r2 },
+			{ 0, 0, -r2 },
+		}
+		for idx, mc in ipairs(outer_coords) do
+			build_micro_cocoon(grid, mc[1], mc[2], mc[3], 5, 4, 5, seed + idx * 31, idx + 4)
+		end
+	end
+
+	if phase == 1 then
+		-- В начальном коконе (радиус 7) ставим компактные испытания по бокам от ядра
+		set_cell(4, 0, 2, TRAP)
+		set_cell(-4, 0, -2, ACID)
+		set_cell(2, 0, 4, NEST)
+		set_cell(-2, 0, -4, CACHE)
+	end
+
+	-- 4. Сортировка от центра наружу для плавной волны роста
 	local list = {}
 	for key, mat in pairs(grid) do
 		local sx, sy, sz = key:match("^([^:]+):([^:]+):([^:]+)$")
@@ -325,7 +332,6 @@ local function generate_cocoon_plan(phase, seed)
 	return list
 end
 
--- Кэшируем планы по фазам и сиду
 local plan_cache = {}
 local function get_plan(phase, seed)
 	local key = phase .. "_" .. seed
@@ -351,14 +357,14 @@ function hive.found(pos, name, id)
 	core.get_node_timer(pos):start(STEP_INTERVAL)
 	return true
 end
--- Пошаговая циклическая перестройка кокона (анимация роста и поглощения)
+-- Пошаговая циклическая перестройка кокона (анимация роста 7 -> 20 -> 40)
 local function grow(pos)
 	local meta = core.get_meta(pos)
 	local id = meta:get_string("hive_id")
 	if not living_heart(pos, id) then
 		return false
 	end
-	if mcl_vars.difficulty == 0 or not player_near(pos, 48) or core.is_protected(pos, "") then
+	if mcl_vars.difficulty == 0 or not player_near(pos, 64) or core.is_protected(pos, "") then
 		core.get_node_timer(pos):start(2.0)
 		return false
 	end
@@ -372,23 +378,25 @@ local function grow(pos)
 	if cursor < 1 then
 		cursor = 1
 	end
-	-- За один кадр анимации обновляем до 28 блоков, чтобы перестройка шла быстро и зрелищно
+	-- Увеличенный пакет блоков за кадр (96), чтобы даже радиус 40 перестраивался динамично и без лагов
 	local changed = 0
-	local batch_limit = 28
-	while cursor <= #plan and changed < batch_limit do
+	local batch_limit = 96
+	local checked = 0
+	local max_checks = 450
+	while cursor <= #plan and changed < batch_limit and checked < max_checks do
 		local entry = plan[cursor]
 		cursor = cursor + 1
+		checked = checked + 1
 		local node_pos = vector.add(pos, entry.offset)
 		local expected = entry.mat
 		local current = core.get_node(node_pos).name
 		if current ~= expected and can_consume_node(node_pos, pos) then
-			-- Не замуровываем игрока внутрь твёрдого блока
 			if
 				expected ~= "air"
 				and expected ~= WEB
 				and expected ~= TRAP
 				and expected ~= ACID
-				and occupied(node_pos, 0.4)
+				and occupied(node_pos, 0.5)
 			then
 				core.set_node(node_pos, { name = "air" })
 			else
@@ -404,8 +412,8 @@ local function grow(pos)
 					bmeta:set_string("heart", core.pos_to_string(pos))
 					bmeta:set_string("hive_id", id)
 					if expected == NEST then
-						bmeta:set_int("brood_left", 6 + phase * 2)
-						core.get_node_timer(node_pos):start(math.random(14, 24))
+						bmeta:set_int("brood_left", 6 + phase * 3)
+						core.get_node_timer(node_pos):start(math.random(12, 22))
 					elseif expected == TRAP or expected == ACID then
 						core.get_node_timer(node_pos):start(1.2)
 					end
@@ -415,19 +423,16 @@ local function grow(pos)
 		end
 	end
 	if cursor <= #plan then
-		-- Продолжаем быструю анимацию перестройки текущей фазы
 		meta:set_int("cursor", cursor)
 		core.get_node_timer(pos):start(STEP_INTERVAL)
 	else
-		-- Фаза завершена: звук пульсации улья и подготовка к следующему циклу роста
 		core.sound_play("mobs_mc_slime_big", {
 			pos = pos,
-			gain = 0.7,
-			pitch = 0.65,
-			max_hear_distance = 28,
+			gain = 0.85,
+			pitch = 0.6,
+			max_hear_distance = 36,
 		}, true)
 		local next_phase = phase < MAX_PHASE and (phase + 1) or MAX_PHASE
-		-- На максимальной фазе кокон периодически перестраивает внутренний лабиринт (меняя seed)
 		if phase >= MAX_PHASE then
 			meta:set_int("seed", (seed + 37) % 999 + 1)
 		end
@@ -456,11 +461,11 @@ local function trap_tick(pos)
 	if mcl_vars.difficulty == 0 or core.is_protected(pos, "") then
 		return true
 	end
-	local target = player_near(pos, 2.0)
+	local target = player_near(pos, 2.2)
 	if not target then
 		return true
 	end
-	mcl_siege.rune(pos, 1.1, "#C94CF2", 0.8)
+	mcl_siege.rune(pos, 1.3, "#C94CF2", 0.8)
 	mcl_potions.give_effect_by_level("slowness", target, 2, 3.5)
 	mcl_potions.give_effect_by_level("darkness", target, 1, 3)
 	core.get_node_timer(pos):start(8)
@@ -474,7 +479,7 @@ local function acid_tick(pos)
 	if mcl_vars.difficulty == 0 or core.is_protected(pos, "") then
 		return true
 	end
-	local target = player_near(pos, 1.6)
+	local target = player_near(pos, 1.8)
 	if not target then
 		return true
 	end
@@ -515,16 +520,16 @@ local function nest_tick(pos)
 	if left <= 0 then
 		return false
 	end
-	if mcl_vars.difficulty == 0 or core.is_protected(pos, "") or not player_near(pos, 16) then
+	if mcl_vars.difficulty == 0 or core.is_protected(pos, "") or not player_near(pos, 20) then
 		return true
 	end
 	local guards, monsters = 0, 0
-	for _, object in ipairs(core.get_objects_inside_radius(heart, 24)) do
+	for _, object in ipairs(core.get_objects_inside_radius(heart, 36)) do
 		local entity = object:get_luaentity()
 		if entity and entity.is_mob and entity.type == "monster" and not entity.dead then
 			monsters = monsters + 1
 			guards = guards + (entity._siege_guard and 1 or 0)
-			if guards >= 9 or monsters >= 16 then
+			if guards >= 12 or monsters >= 22 then
 				return true
 			end
 		end
@@ -571,8 +576,6 @@ local function open_cache(pos, node, clicker)
 		end
 	end
 end
--- Материалы кокона:
--- 1. Ядро улья (как было)
 core.register_node(HEART, {
 	description = S("Hive heart"),
 	tiles = { "crimson_hyphae.png^[colorize:#DF1550:72" },
@@ -583,7 +586,6 @@ core.register_node(HEART, {
 	_mcl_blast_resistance = 8,
 	on_timer = grow,
 })
--- 2. Внутренняя пульсирующая слизь вокруг ядра
 core.register_node(SLIME, {
 	description = S("Hive living slime"),
 	tiles = { "mcl_core_slime.png^[colorize:#7C1E5E:95" },
@@ -593,7 +595,6 @@ core.register_node(SLIME, {
 	_mcl_hardness = 0.6,
 	_mcl_blast_resistance = 4,
 })
--- 3. Средние хитиновые рёбра (как было)
 core.register_node(RIB, {
 	description = S("Hive rib"),
 	tiles = { "mcl_blackstone_polished_bricks.png^[colorize:#511734:62" },
@@ -602,7 +603,6 @@ core.register_node(RIB, {
 	_mcl_hardness = 1.5,
 	_mcl_blast_resistance = 6,
 })
--- 4. Внешний твёрдый панцирь кокона
 core.register_node(SHELL, {
 	description = S("Hive chitin shell"),
 	tiles = { "mcl_blackstone_gilded_side.png^[colorize:#2E0C24:110" },
@@ -611,7 +611,6 @@ core.register_node(SHELL, {
 	_mcl_hardness = 2.5,
 	_mcl_blast_resistance = 9,
 })
--- 5. Вязкая паутина кокона
 core.register_node(WEB, {
 	description = S("Hive dense web"),
 	drawtype = "plantlike",
@@ -628,7 +627,6 @@ core.register_node(WEB, {
 	drop = "",
 	_mcl_hardness = 0.8,
 })
--- 6. Руническая ловушка-испытание
 core.register_node(TRAP, {
 	description = S("Hive snare"),
 	drawtype = "nodebox",
@@ -642,7 +640,6 @@ core.register_node(TRAP, {
 	_mcl_hardness = 0.8,
 	on_timer = trap_tick,
 })
--- 7. Кислотная железа-ловушка
 core.register_node(ACID, {
 	description = S("Hive acid pool"),
 	drawtype = "nodebox",
@@ -656,7 +653,6 @@ core.register_node(ACID, {
 	_mcl_hardness = 0.7,
 	on_timer = acid_tick,
 })
--- 8. Инкубатор охраны
 core.register_node(NEST, {
 	description = S("Hive nursery"),
 	tiles = { "mob_spawner.png^[colorize:#CA226B:80" },
@@ -666,7 +662,6 @@ core.register_node(NEST, {
 	_mcl_hardness = 2,
 	on_timer = nest_tick,
 })
--- 9. Запечатанная сокровищница
 core.register_node(CACHE, {
 	description = S("Sealed hive cache"),
 	tiles = { "mcl_blackstone_gilded_side.png" },
