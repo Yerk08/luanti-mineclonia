@@ -6,7 +6,7 @@
 
 1. **Загрузите конфигурацию сервера в свое окружение:**
    ```bash
-   git clone https://github.com/Yerk08/luanti-mineclonia
+   git clone https://github.com/Yerk08/luanti-mineclonia && cd luanti-mineclonia
    ```
 
 2. **Настройте конфигурацию сервера под себя:**
