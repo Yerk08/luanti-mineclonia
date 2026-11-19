@@ -10,21 +10,6 @@ local LOCAL_LIMIT = 16 -- Лимит разрушенных блоков в ра
 local GLOBAL_LIMIT = 64 -- Общий лимит разрушений
 local MAX_BLOCKS_PER_ZOMBIE = 12 -- Сколько блоков может пробить один зомби
 
--- В начале файла меняем настройки отрядов зомби:
-local function configure_horde(spawner)
-	spawner.weight = (spawner.biomes[1] == "Desert") and 120 or 240
-	spawner.pack_min = 6
-	spawner.pack_max = 14
-end
-
-core.register_on_mods_loaded(function()
-	mcl_siege.configure_spawns("mobs_mc:zombie", configure_horde)
-	mcl_siege.configure_spawns("mobs_mc:husk", function(spawner)
-		configure_horde(spawner)
-		spawner.weight = 320
-	end)
-end)
-
 local function can_break(pos)
 	local node = core.get_node(pos)
 	if not node or node.name == "air" or node.name == "ignore" then

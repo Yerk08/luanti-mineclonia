@@ -55,8 +55,8 @@ end
 
 -- Крупные отряды и высокий вес спавна для всех врагов
 local horde_roster = {
-	["mobs_mc:zombie"]         = { weight = 260, min = 6, max = 14 },
-	["mobs_mc:husk"]           = { weight = 200, min = 6, max = 12 },
+	["mobs_mc:zombie"]         = { weight = 500, min = 3, max = 10 },
+	["mobs_mc:husk"]           = { weight = 400, min = 3, max = 10 },
 	["mobs_mc:skeleton"]       = { weight = 130, min = 4, max = 9 },
 	["mobs_mc:stray"]          = { weight = 120, min = 4, max = 9 },
 	["mobs_mc:bogged"]         = { weight = 120, min = 4, max = 9 },
