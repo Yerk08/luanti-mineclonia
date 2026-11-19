@@ -525,24 +525,21 @@ local function hatch_cocoon(heart_pos, max_r)
 	end)
 
 	-- Многослойный оглушительный звук разрыва и пробуждения орды
-	core.sound_play("thunder", {
-		pos = heart_pos,
-		gain = 4.6,
-		pitch = 0.75,
-		max_hear_distance = 200,
-	}, true)
-	core.sound_play("mobs_mc_ender_dragon_death", {
-		pos = heart_pos,
-		gain = 4.6,
-		pitch = 0.65,
-		max_hear_distance = 200,
-	}, true)
-	core.sound_play("mobs_mc_slime_big", {
-		pos = heart_pos,
-		gain = 4.6,
-		pitch = 0.5,
-		max_hear_distance = 200,
-	}, true)
+	if heart_pos then core.sound_play("thunder", { pos = 
+        heart_pos, gain = 1.5, pitch = 0.75, 
+        max_hear_distance = 200,
+    }, true)
+    core.after(0.1, function() 
+        core.sound_play("mobs_mc_ender_dragon_death", {
+            pos = heart_pos, gain = 1.5, pitch = 0.65, 
+            max_hear_distance = 200,
+        }, true)
+    end) core.after(0.2, function() 
+        core.sound_play("mobs_mc_slime_big", {
+            pos = heart_pos, gain = 1.5, pitch = 0.5, 
+            max_hear_distance = 200,
+        }, true)
+    end) end
 	for i = 1, 4 do
 		core.after(i * 0.25, function()
 			core.sound_play("mobs_mc_zombie_growl", {
@@ -932,7 +929,7 @@ local function start_decay(center_pos, max_radius)
 			for dz = -radius, radius do
 				local p = vector.offset(center_pos, dx, dy, dz)
 				local name = core.get_node(p).name
-				if is_existing_hive_block(name) and name ~= CACHE then
+				if is_existing_hive_block(name) then
 					targets[#targets + 1] = {
 						pos = p,
 						dist = dx * dx + dy * dy + dz * dz,
