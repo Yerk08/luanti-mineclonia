@@ -14,8 +14,8 @@ local CACHE = prefix .. "cache"
 
 local CELL_SIZE = 112
 local MIN_SPACING = 96
--- Фазы радиуса: 4 -> 7 -> 10 -> 13
-local PHASE_RADII = { 4, 7, 10, 13 }
+-- Фазы радиуса: 2 -> 4 -> 7 -> 15 -> 20
+local PHASE_RADII = { 2, 4, 7, 15, 20 }
 local MAX_PHASE = #PHASE_RADII
 local CARDINAL = { { 1, 0 }, { 0, 1 }, { -1, 0 }, { 0, -1 } }
 
@@ -30,11 +30,11 @@ local soft_shell_groups = {
 
 -- Экспоненциальное замедление скорости роста по фазам
 local function get_step_interval(phase)
-	return 0 -- 1.0
+	return 0.5 * phase
 end
 
 local function get_phase_pause(phase)
-	return 0 -- 4.5 * (3 ^ (phase - 1))
+	return 0.5 * phase
 end
 
 local function cell_key(x, z)
@@ -655,13 +655,14 @@ local function hatch_cocoon(heart_pos, max_r)
 	core.after(0.1, open_petal_step)
 end
 
--- Пошаговая надстройка нового слоя с активным подъёмом сердца, экспоненциальным замедлением и без регенерации сломанного
+-- Пошаговая надстройка нового слоя с активным подъёмом сердца, защитой ландшафта и без регенерации сломанного
 local function grow(pos)
 	local meta = core.get_meta(pos)
 	local id = meta:get_string("hive_id")
 	if not living_heart(pos, id) then
 		return false
 	end
+
 	local any_player = false
 	for _, object in ipairs(core.get_objects_inside_radius(pos, 72)) do
 		if object:is_player() then
@@ -673,17 +674,27 @@ local function grow(pos)
 		core.get_node_timer(pos):start(1.0)
 		return false
 	end
+
 	local phase = meta:get_int("phase")
 	if phase < 1 then
 		phase = 1
 	end
+
+	-- Запоминаем уровень земли при старте, чтобы кокон не выкапывал кратер вниз
+	local ground_y = meta:get_int("ground_y")
+	if ground_y == 0 then
+		ground_y = pos.y
+		meta:set_int("ground_y", ground_y)
+	end
+
 	local seed = meta:get_int("seed")
 	local plan = get_plan(phase, seed)
 	local cursor = meta:get_int("cursor")
 	if cursor < 1 then
 		cursor = 1
 	end
-	-- Активный подъём сердца вверх: поднимаем его на +1 блок на 35% и 70% прогресса фазы
+
+	-- Активный подъём сердца вверх по мере роста фазы
 	local lifts = meta:get_int("lift_steps")
 	local target_lifts = math.floor((cursor / math.max(1, #plan)) * 5.5)
 	if lifts < target_lifts then
@@ -692,27 +703,41 @@ local function grow(pos)
 			return false
 		end
 	end
+
 	local changed = 0
-	-- Чем выше фаза, тем меньше блоков ставим за один тик (дополнительное плавное замедление)
 	local batch_limit = math.max(24, math.floor(140 / phase))
 	local checked = 0
 	local max_checks = 600
+	local prev_r = phase > 1 and PHASE_RADII[phase - 1] or 0
+
 	while cursor <= #plan and changed < batch_limit and checked < max_checks do
 		local entry = plan[cursor]
 		cursor = cursor + 1
 		checked = checked + 1
+
 		local node_pos = vector.add(pos, entry.offset)
 		local expected = entry.mat
 		local current = core.get_node(node_pos).name
-		-- Никогда не восстанавливаем сломанные игроком блоки:
+
 		-- 1. Не трогаем уже существующие блоки улья
 		local keep_old_layer = is_existing_hive_block(current)
-		-- 2. Если в точке уже пусто (игрок сломал стену/паутину) и она внутри предыдущих слоёв — не застраиваем заново
-		local prev_r = phase > 1 and PHASE_RADII[phase - 1] or 0
+
+		-- 2. Не застраиваем заново дыры, пробитые игроком внутри предыдущих слоёв
 		local player_cleared = (current == "air")
 			and (prev_r > 0)
 			and (entry.offset.x ^ 2 + entry.offset.z ^ 2 <= prev_r ^ 2)
-		if not keep_old_layer and not player_cleared and current ~= expected and can_consume_node(node_pos, pos) then
+
+		-- 3. Не разрушаем природный грунт ниже основания кокона (чтобы после распада не оставалась яма)
+		local cur_def = core.registered_nodes[current]
+		local is_natural_ground = (node_pos.y < ground_y) and cur_def and cur_def.walkable
+
+		if
+			not keep_old_layer
+			and not player_cleared
+			and not is_natural_ground
+			and current ~= expected
+			and can_consume_node(node_pos, pos)
+		then
 			if
 				expected ~= "air"
 				and expected ~= WEB
@@ -744,6 +769,7 @@ local function grow(pos)
 			changed = changed + 1
 		end
 	end
+
 	if cursor <= #plan then
 		meta:set_int("cursor", cursor)
 		core.get_node_timer(pos):start(get_step_interval(phase))
@@ -754,13 +780,13 @@ local function grow(pos)
 			pitch = 0.65,
 			max_hear_distance = 36,
 		}, true)
+
 		if phase < MAX_PHASE then
 			local next_phase = phase + 1
 			meta:set_int("phase", next_phase)
 			meta:set_int("cursor", 1)
 			meta:set_int("lift_steps", 0)
 			local pause = get_phase_pause(next_phase)
-			-- На переходе фазы тоже поднимаем сердце вверх с экспоненциальной паузой
 			local moved_pos = elevate_heart(pos, meta, pause)
 			if vector.equals(moved_pos, pos) then
 				core.get_node_timer(pos):start(pause)
@@ -773,8 +799,10 @@ local function grow(pos)
 			end
 		end
 	end
+
 	return false
 end
+
 local function part_heart(pos)
 	local meta = core.get_meta(pos)
 	local heart = core.string_to_pos(meta:get_string("heart"))
