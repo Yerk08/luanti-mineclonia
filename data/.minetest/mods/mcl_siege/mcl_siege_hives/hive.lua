@@ -30,16 +30,14 @@ local soft_shell_groups = {
 
 -- Экспоненциальное замедление скорости роста по фазам
 local function get_step_interval(phase)
-	-- local intervals = { 1.2, 1.8, 2.2, 2.0 }
-	return 0.0
-	-- return intervals[phase] or 2.0
+	local intervals = { 1.2, 1.8, 2.2, 2.0 }
+	return intervals[phase] or 2.0
 end
 
 local function get_phase_pause(phase)
 	-- Пауза перед началом 2-й, 3-й и 4-й фаз (в секундах)
-	-- local pauses = { 0, 25, 60, 120 }
-	return 0.0
-	-- return pauses[phase] or 30
+	local pauses = { 0, 25, 60, 120 }
+	return pauses[phase] or 30
 end
 
 local function cell_key(x, z)
@@ -118,6 +116,21 @@ local function player_near(pos, radius)
 	for _, object in ipairs(core.get_objects_inside_radius(pos, radius)) do
 		if object:is_player() and mcl_siege.is_survival_player(object) then
 			return object
+		end
+	end
+end
+
+local function play_loud_hive_sound(pos, sound_name, pitch, radius, gain)
+	if not pos then
+		return
+	end
+	for _, obj in ipairs(core.get_objects_inside_radius(pos, radius or 80)) do
+		if obj:is_player() then
+			core.sound_play(sound_name, {
+				to_player = obj:get_player_name(),
+				gain = gain or 1.0,
+				pitch = pitch or 0.7,
+			}, true)
 		end
 	end
 end
@@ -543,22 +556,12 @@ local function hatch_cocoon(heart_pos, max_r)
 
 	-- Многослойный оглушительный звук разрыва и пробуждения орды
 	if heart_pos then
-		core.sound_play("mobs_mc_ender_dragon_death", {
-			pos = heart_pos,
-			gain = 1.5,
-			pitch = 0.65,
-			max_hear_distance = 200,
-		}, true)
-	end
-	for i = 1, 4 do
-		core.after(i * 0.25, function()
-			core.sound_play("mobs_mc_zombie_death", {
-				pos = heart_pos,
-				gain = 1.4,
-				pitch = (65 + i * 10) / 100,
-				max_hear_distance = 64,
-			}, true)
-		end)
+		play_loud_hive_sound(heart_pos, "tnt_explode", 0.5, 110)
+		for i = 1, 4 do
+			core.after(i * 0.25, function()
+				play_loud_hive_sound(heart_pos, "mobs_mc_zombie_death", (65 + i * 10) / 100, 90)
+			end)
+		end
 	end
 
 	-- Находим ближайшего игрока, чтобы орда сразу бросилась на него
@@ -669,12 +672,9 @@ end
 local function signal_phase_up(pos, phase)
 	local rx = PHASE_RADII[phase] or 7
 	local top_y = math.floor(rx * 1.2)
-	core.sound_play("mobs_mc_ender_dragon_death", {
-		pos = pos,
-		gain = 1.4,
-		pitch = (phase == 3) and 0.65 or 0.5,
-		max_hear_distance = 120,
-	}, true)
+	local pitch = (phase == 3) and 0.65 or 0.5
+	play_loud_hive_sound(pos, "mobs_mc_zombie_death", pitch, 90)
+
 	core.add_particlespawner({
 		amount = phase * 60,
 		time = 0.8,
@@ -731,43 +731,34 @@ end
 
 -- Цикл пульсации перед вылуплением (6 ударов по 5 секунд = 30 секунд)
 local function pulse_before_hatch(pos, id, beats_left)
-	if not living_heart(pos, id) then
-		return -- Игрок успел сломать сердце!
+	local actual_pos = hive.locate_heart(pos, id)
+	if not actual_pos then
+		return
 	end
 
 	if beats_left <= 0 then
-		local meta = core.get_meta(pos)
+		local meta = core.get_meta(actual_pos)
 		if meta:get_int("hatched") == 0 then
 			meta:set_int("hatched", 1)
-			hatch_cocoon(pos, PHASE_RADII[MAX_PHASE] or 15)
+			hatch_cocoon(actual_pos, PHASE_RADII[MAX_PHASE] or 15)
 		end
 		return
 	end
 
 	-- Двойной удар сердца (тук-тук)
-	core.sound_play("mobs_mc_slime_big", {
-		pos = pos,
-		gain = 1.3,
-		pitch = 0.55,
-		max_hear_distance = 90,
-	}, true)
+	play_loud_hive_sound(actual_pos, "mobs_mc_zombie_door_break", 0.45, 85)
 	core.after(0.28, function()
-		if living_heart(pos, id) then
-			core.sound_play("mobs_mc_slime_big", {
-				pos = pos,
-				gain = 1.0,
-				pitch = 0.75,
-				max_hear_distance = 90,
-			}, true)
+		if hive.locate_heart(actual_pos, id) then
+			play_loud_hive_sound(actual_pos, "mobs_mc_zombie_door_break", 0.65, 85)
 		end
 	end)
 
 	-- Выброс багровых частиц над коконом и у сердца
-	local top_pos = vector.offset(pos, 0, 14, 0)
+	local top_pos = vector.offset(actual_pos, 0, 14, 0)
 	core.add_particlespawner({
 		amount = 400,
 		time = 1.5,
-		minpos = vector.subtract(pos, 2),
+		minpos = vector.subtract(actual_pos, 2),
 		maxpos = vector.add(top_pos, 3),
 		minvel = { x = -2.5, y = 4, z = -2.5 },
 		maxvel = { x = 2.5, y = 10, z = 2.5 },
@@ -780,7 +771,7 @@ local function pulse_before_hatch(pos, id, beats_left)
 	})
 
 	core.after(5.0, function()
-		pulse_before_hatch(pos, id, beats_left - 1)
+		pulse_before_hatch(actual_pos, id, beats_left - 1)
 	end)
 end
 
@@ -903,13 +894,6 @@ local function grow(pos)
 		meta:set_int("cursor", cursor)
 		core.get_node_timer(pos):start(get_step_interval(phase))
 	else
-		core.sound_play("mobs_mc_slime_big", {
-			pos = pos,
-			gain = 0.85,
-			pitch = 0.65,
-			max_hear_distance = 36,
-		}, true)
-
 		if phase < MAX_PHASE then
 			local next_phase = phase + 1
 			if next_phase >= 3 then
@@ -953,8 +937,9 @@ local function apply_short_effect(player, name, level, duration)
 	if not mcl_potions or not mcl_potions.registered_effects or not mcl_potions.registered_effects[name] then
 		return
 	end
-	mcl_potions.give_effect(name, player, level, duration)
+	pcall(mcl_potions.give_effect, name, player, math.floor(level), math.ceil(duration))
 end
+
 local function trap_tick(pos)
 	local heart, unloaded = part_heart(pos)
 	if not heart then
@@ -968,8 +953,9 @@ local function trap_tick(pos)
 		return true
 	end
 	mcl_siege.rune(pos, 1.3, "#C94CF2", 0.8)
-	apply_short_effect(target, "slowness", 2, 3.5)
-	apply_short_effect(target, "darkness", 1, 3.0)
+	-- Вместо slowness (который ломает set_fov в Mineclonia) используем fatigue + darkness
+	apply_short_effect(target, "fatigue", 2, 4)
+	apply_short_effect(target, "darkness", 1, 3)
 	core.get_node_timer(pos):start(7)
 	return false
 end

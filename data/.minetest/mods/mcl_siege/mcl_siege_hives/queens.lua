@@ -9,21 +9,21 @@ return function(hive)
 	local names = { modname .. ":vespera", modname .. ":kharza" }
 
 	local queen_curses = {
-		{ "darkness", 1, 4.0 },
-		{ "weakness", 1, 5.0 },
-		{ "slowness", 2, 4.5 },
-		{ "levitation", 1, 1.7 },
-		{ "nausea", 1, 5.0 },
-		{ "poison", 1, 3.5 },
-		{ "mining_fatigue", 2, 6.0 },
+		{ "darkness", 1, 4 },
+		{ "weakness", 1, 5 },
+		{ "fatigue", 2, 5 },
+		{ "levitation", 1, 2 },
+		{ "nausea", 1, 5 },
+		{ "poison", 1, 4 },
+		{ "mining_fatigue", 2, 6 },
 	}
 	local function apply_short_effect(player, name, level, duration)
-		if not mcl_potions.registered_effects or not mcl_potions.registered_effects[name] then
+		if not mcl_potions or not mcl_potions.registered_effects or not mcl_potions.registered_effects[name] then
 			return
 		end
-		mcl_potions.give_effect_by_level(name, player, level, duration)
-		-- Страховка: принудительно снимаем эффект по истечении duration секунд
-		core.after(duration, function()
+		local dur = math.ceil(duration)
+		pcall(mcl_potions.give_effect_by_level, name, player, math.floor(level), dur)
+		core.after(dur, function()
 			if player and player:is_valid() and mcl_potions.clear_effect then
 				mcl_potions.clear_effect(player, name)
 			end
