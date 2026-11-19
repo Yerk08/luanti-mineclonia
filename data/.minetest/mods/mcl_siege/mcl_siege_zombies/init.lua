@@ -61,34 +61,54 @@ end
 
 local function find_block(pos, target_pos)
 	local dx, dz = target_pos.x - pos.x, target_pos.z - pos.z
+	local dy = target_pos.y - pos.y
 	local length = math.sqrt(dx * dx + dz * dz)
-	if length < 0.35 or math.abs(target_pos.y - pos.y) > 2.5 then
+	
+	if math.abs(dy) > 4.0 then
 		return
 	end
-	local reach = math.min(length, 1.8)
+
 	local closest_node = nil
 	local min_dist = math.huge
 
-	-- Проверяем снизу вверх (0.45 - ноги, 0.95 - тело, 1.45 - голова)
-	for _, height in ipairs({ 0.45, 0.95, 1.45 }) do
-		local start = vector.offset(pos, 0, height, 0)
-		local finish = vector.offset(start, dx * reach / length, 0, dz * reach / length)
-		for hit in core.raycast(start, finish, false, false) do
-			if hit.type == "node" then
-				local allowed = can_break(hit.under)
-				if allowed then
-					local dist = vector.distance(start, hit.intersection_point)
-					if dist < min_dist then
-						min_dist = dist
-						closest_node = hit.under
+	-- 1. Горизонтальный поиск (стены перед зомби)
+	if length >= 0.35 then
+		local reach = math.min(length, 1.8)
+		for _, height in ipairs({ 0.45, 0.95, 1.45 }) do
+			local start = vector.offset(pos, 0, height, 0)
+			local finish = vector.offset(start, dx * reach / length, 0, dz * reach / length)
+			for hit in core.raycast(start, finish, false, false) do
+				if hit.type == "node" and hit.under then
+					if can_break(hit.under) then
+						local dist = vector.distance(start, hit.under)
+						if dist < min_dist then
+							min_dist = dist
+							closest_node = hit.under
+						end
 					end
+					break
+				end
+			end
+		end
+	end
+
+	if closest_node then
+		return closest_node
+	end
+
+	-- 2. Поиск под ногами (если игрок ниже более чем на 1.2 блока и рядом)
+	if dy < -1.2 and length < 2.0 then
+		local start = vector.offset(pos, 0, 0.2, 0)
+		local finish = vector.offset(pos, 0, -1.5, 0)
+		for hit in core.raycast(start, finish, false, false) do
+			if hit.type == "node" and hit.under then
+				if can_break(hit.under) then
+					return hit.under
 				end
 				break
 			end
 		end
 	end
-
-	return closest_node
 end
 
 local function attack_melee(self, attach_pos, pos, dtime, target_pos, visible)
