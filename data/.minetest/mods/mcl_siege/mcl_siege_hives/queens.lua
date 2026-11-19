@@ -466,7 +466,7 @@ return function(hive)
 			end
 		end
 	end
-	local function attack_melee(self, attach_pos, pos, dtime, target_pos, visible)
+		local function attack_melee(self, attach_pos, pos, dtime, target_pos, visible)
 		local target = self.attack
 		if not target or not target:is_player() or not mcl_siege.is_survival_player(target) then
 			combat[self] = nil
@@ -474,12 +474,15 @@ return function(hive)
 		end
 		local state = combat[self]
 		if not state or state.target ~= target then
-			state = { target = target, cooldown = 2.5, spit_cd = 1.2, move_cd = 1.0 }
+			-- Начальные таймеры перед первыми атаками увеличены
+			state = { target = target, cooldown = 4.0, spit_cd = 2.5, move_cd = 2.5, global_cd = 1.5 }
 			combat[self] = state
 		end
 		state.cooldown = state.cooldown - dtime
 		state.spit_cd = state.spit_cd - dtime
 		state.move_cd = state.move_cd - dtime
+		state.global_cd = (state.global_cd or 0) - dtime
+
 		if state.spell then
 			local spell = state.spell
 			spell.remaining = spell.remaining - dtime
@@ -487,47 +490,58 @@ return function(hive)
 			if spell.remaining <= 0 then
 				pulse(self, spell)
 				state.spell = nil
+				state.global_cd = 2.0 -- Пауза после каста руны
 			end
 			return
 		end
+
 		local distance = vector.distance(pos, target_pos)
 		local low_hp = self.health <= self.initial_properties.hp_max * 0.5
-		-- Веспера: прыгает в свободную случайную сторону и бьёт волной при приземлении
-		if self._siege_mobility == "jump" and state.move_cd <= 0 and not self._vespera_jumping and visible then
-			if distance <= 15.0 then
+
+		-- Если общий кулдаун ещё не прошёл, королева просто бежит в ближний бой
+		if state.global_cd <= 0 and visible then
+			-- 1. Мобильность (прыжок Весперы или рывок Харзы)
+			if self._siege_mobility == "jump" and state.move_cd <= 0 and not self._vespera_jumping and distance <= 15.0 then
 				if random_jump(self, pos, target_pos) then
-					state.move_cd = low_hp and 2.4 or 3.4
-					state.spit_cd = math.min(state.spit_cd, 0.4)
+					state.move_cd = low_hp and 4.5 or 6.0
+					state.global_cd = 2.2
 					return
 				else
-					state.move_cd = 0.8
+					state.move_cd = 1.5
 				end
-			end
-		end
-		-- Харза: быстро бегает и регулярно включает огненный спринт-таран
-		if self._siege_mobility == "run" and state.move_cd <= 0 and visible then
-			if distance >= 2.5 and distance <= 18.0 then
-				state.move_cd = low_hp and 3.0 or 4.2
+			elseif self._siege_mobility == "run" and state.move_cd <= 0 and distance >= 3.0 and distance <= 18.0 then
+				state.move_cd = low_hp and 5.5 or 7.5
+				state.global_cd = 2.5
 				start_ember_sprint(self, pos)
+				return
+			end
+
+			-- 2. Плевок кислотой (добавлен return, чтобы не совмещался с руной)
+			if state.spit_cd <= 0 and distance >= 3.5 and distance <= 18 then
+				state.spit_cd = math.random(4, 6)
+				state.global_cd = 2.0
+				self:look_at(target_pos)
+				spit_acid(self, pos, target_pos)
+				return
+			end
+
+			-- 3. Руна проклятия
+			if state.cooldown <= 0 and distance <= 14 then
+				state.spell = { pos = target_pos, remaining = WARNING }
+				state.cooldown = low_hp and 9.0 or 12.0
+				state.global_cd = 2.5
+				self:cancel_navigation()
+				self:halt_in_tracks()
+				self:look_at(target_pos)
+				self:set_animation("stand")
+				mcl_siege.rune(target_pos, RADIUS, self._siege_color, WARNING)
+				return
 			end
 		end
-		if state.spit_cd <= 0 and visible and distance >= 3.0 and distance <= 18 then
-			state.spit_cd = math.random(2, 4)
-			self:look_at(target_pos)
-			spit_acid(self, pos, target_pos)
-		end
-		if state.cooldown <= 0 and visible and distance <= 14 then
-			state.spell = { pos = target_pos, remaining = WARNING }
-			state.cooldown = low_hp and 6.5 or 9.0
-			self:cancel_navigation()
-			self:halt_in_tracks()
-			self:look_at(target_pos)
-			self:set_animation("stand")
-			mcl_siege.rune(target_pos, RADIUS, self._siege_color, WARNING)
-			return
-		end
+
 		return mob.attack_melee(self, attach_pos, pos, dtime, target_pos, visible)
 	end
+
 	local function attack_end(self)
 		combat[self] = nil
 		return mob.attack_end(self)
