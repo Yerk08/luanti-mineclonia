@@ -1,0 +1,130 @@
+# Show a minimap, with each player's mode (normal, wide, off) remembered
+# between sessions. Set it with the map screen's selector or /minimap.
+sharp_map.minimap (Minimap) bool true
+
+# Where the minimap comes from.
+# map: drawn from this mod's saved map in a frame in the top-right corner,
+#   so it matches the map screen and is filled in right after rejoining.
+#   Luanti's minimap is kept off and V only shows a hint.
+# engine: Luanti's own minimap (only shows what your client has loaded).
+#   V cycles it; the remembered mode applies on join.
+sharp_map.minimap_source (Minimap source) enum map map,engine
+
+# Minimap on for players who have not chosen a mode yet.
+sharp_map.minimap_on_join (Minimap on by default) bool true
+
+# Width of the normal minimap, in nodes (Luanti's minimap only; the
+# map-drawn minimap shows 128 nodes, or 256 in the wide view).
+sharp_map.minimap_size (Normal minimap size) int 128 32 512
+
+# Width of the wide minimap, in nodes (Luanti's minimap only).
+sharp_map.minimap_wide_size (Wide minimap size) int 256 32 512
+
+# Size of the map-drawn minimap's window, as a percentage of the shorter
+# side of each player's screen, like Luanti's own minimap (25% of the
+# height). The slim frame adds about 5% around it. It adapts to every
+# screen size and HUD scale, and is rebuilt when the window is resized.
+sharp_map.minimap_screen_percent (Map minimap size, % of screen) int 25 10 50
+
+# The player on the minimap and on the map screen is an arrow that turns
+# with you (on the minimap the game turns it every frame, at no cost to the
+# server). Off: a figure that never turns, as before 1.2.0.
+sharp_map.player_arrow (Player arrow) bool true
+
+# Turn the minimap arrow the other way round. Only needed if, facing east
+# (where the sun rises), the minimap arrow points west.
+sharp_map.arrow_reverse (Reverse the minimap arrow) bool false
+
+# Seconds between position updates of the map-drawn minimap. Lower is
+# smoother but sends more updates (up to 81 small ones each time).
+sharp_map.minimap_update (Map minimap update interval) float 0.1 0.05 1
+
+# Most waypoints one player can keep (the death point is always kept).
+sharp_map.max_waypoints (Waypoints per player) int 50 1 200
+
+# Waypoints set to "Auto" show their name and distance within this many
+# nodes (farther away, only the icon). 0: never because of distance.
+sharp_map.label_distance (Waypoint names within this distance) int 100 0 1000
+
+# Waypoints set to "Auto" also show their name and distance while the
+# crosshair is within this many degrees of them (the closest one only).
+# 0 turns this off.
+sharp_map.look_angle (Show waypoint name when looked at, degrees) int 6 0 30
+
+# Add a "Death point" waypoint where a player dies, replacing the last one.
+sharp_map.death_waypoint (Death point waypoint) bool true
+
+# Who can teleport to their waypoints: players with the "teleport"
+# privilege, all players, or nobody.
+sharp_map.teleport (Teleport to waypoints) enum priv priv,all,off
+
+# Seconds between map scans. Each scan reads one 16x16 patch of ground
+# near each player, so lower values fill the map faster but cost more.
+sharp_map.scan_interval (Map scan interval) float 0.25 0.05 5
+
+# How far around each player the map is filled in, in 16-node chunks.
+sharp_map.scan_radius (Map scan radius, in 16-node chunks) int 8 2 16
+
+# Milliseconds per server step for drawing map pictures (with relief).
+# The map screen opens at once with the pictures that are ready (they are
+# saved, so this is mostly once per tile) and fills in the rest.
+sharp_map.draw_budget (Map drawing time per step, ms) int 6 1 50
+
+# Milliseconds per server step for drawing minimap pieces. Pieces near
+# you come first, and the minimap keeps its old picture until the new one
+# is ready, so entering a cave or another layer never stalls the game.
+sharp_map.minimap_budget (Minimap drawing time per step, ms) int 3 1 50
+
+# Milliseconds per server step for redrawing old maps in the background
+# (/map redraw, and after an update). It pauses while the server is busy.
+sharp_map.redraw_budget (Background redraw time per step, ms) int 3 1 50
+
+# After an update that changes how maps look, redraw every saved map in
+# the background by itself, a little at a time.
+sharp_map.redraw_on_update (Redraw old maps after an update) bool true
+
+# Map caves as players walk through them, in 16-node layers: the minimap
+# and the map screen show them underground (and always in the Nether).
+# Only places a player could stand in and walk to are mapped, so caves
+# behind walls are never shown before someone gets there.
+sharp_map.caves (Cave layers) bool true
+
+# How far around an underground player caves are mapped, in nodes (to each
+# side; up and down it is 12). Larger maps more at once but costs more.
+sharp_map.cave_radius (Cave mapping radius, in nodes) int 20 8 40
+
+# Fewest seconds between two cave mappings for the same player. A player
+# who stands still is not mapped again until they move or something nearby
+# changes.
+sharp_map.cave_interval (Cave mapping interval) float 1 0.25 5
+
+# Milliseconds per server step for mapping caves. A mapping is spread
+# over as many steps as it needs, and waits while the server is busy.
+sharp_map.cave_budget (Cave mapping time per step, ms) int 3 1 50
+
+# Keep mapping caves in the background from caves already on the map, so
+# tunnels fill out beyond where you walked. It only grows from mapped
+# caves and only into places a player could walk to from them (never
+# through a wall), near players, under the cave mapping time per step,
+# and never while a player's own cave mapping is waiting.
+sharp_map.cave_background (Background cave mapping) bool true
+
+# How far from a player background cave mapping works, in nodes (in every
+# direction). Places farther away wait until someone comes near.
+sharp_map.cave_background_range (Background cave mapping range, in nodes) int 64 16 160
+
+# Fewest seconds between two background cave mappings. Higher is lighter
+# but fills caves out more slowly.
+sharp_map.cave_background_interval (Background cave mapping interval) float 0.5 0.1 10
+
+# Write every click on the map screen to debug.txt, to help track down
+# problems. Leave off in normal play.
+sharp_map.debug (Log map screen clicks) bool false
+
+# Write a line to debug.txt for any single piece of Sharp Map's work that
+# takes longer than the time below, saying what it was. For finding the
+# cause of a lag spike; leave it off otherwise.
+sharp_map.debug_slow (Log slow steps) bool false
+
+# How long a piece of work may take before it is logged, in milliseconds.
+sharp_map.debug_slow_ms (Slow step threshold, ms) int 20 1 1000

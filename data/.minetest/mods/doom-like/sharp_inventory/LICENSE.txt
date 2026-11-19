@@ -1,0 +1,31 @@
+sharp_inventory - Luanti mod for Mineclonia
+
+Code and all textures (textures/sharp_inventory_*.png), which were drawn
+from scratch for this mod:
+
+To the extent possible under law, the author(s) have dedicated all
+copyright and related and neighboring rights to this mod to the public
+domain worldwide, under the Creative Commons CC0 1.0 Universal Public
+Domain Dedication. This mod is distributed without any warranty.
+
+You may use, copy, modify and redistribute it for any purpose, with or
+without credit. Credit is appreciated but not required.
+
+Full legal text:
+https://creativecommons.org/publicdomain/zero/1.0/legalcode
+
+The mod ships no Mineclonia textures. At runtime it shows its own
+textures in place of Mineclonia's GUI textures. The creative Map button
+(shown only with the Sharp Map mod) uses Mineclonia's own map item
+texture (mcl_maps_map_filled.png) from the installed game; it is not
+included in this mod.
+
+Credits
+
+Made for Mineclonia and Luanti, with thanks to the Mineclonia and Luanti
+developers whose work this builds on. Inspired by the i3 inventory mod;
+no i3 code or art is used.
+
+Designed, tested and maintained by Legacy_Tall_Grass. The code and the
+textures were made with AI assistance: Claude (Anthropic), model Claude
+Opus 5.5, used through claude.ai.

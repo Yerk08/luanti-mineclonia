@@ -64,20 +64,23 @@ local function roll_random_curse()
 
 	local count = math.random(2, 3)
 	local chosen_effects = {}
-	local rune_color = chaotic_pool[indices][6]
+	-- Исправлено: берем первый перемешанный индекс indices[1]
+	local rune_color = chaotic_pool[indices[1]][6]
 
 	for i = 1, count do
 		local entry = chaotic_pool[indices[i]]
-		local name = entry
+		-- Исправлено: указываем конкретные индексы полей таблицы entry
+		local name = entry[1]
 		if mcl_potions.registered_effects and mcl_potions.registered_effects[name] then
-			local level = math.random(entry, entry)
-			local duration = entry + math.random() * (entry - entry)
+			local level = math.random(entry[2], entry[3])
+			local duration = entry[4] + math.random() * (entry[5] - entry[4])
 			chosen_effects[#chosen_effects + 1] = { name, level, duration }
 		end
 	end
 
+	-- Исправлено: двойные фигурные скобки, так как ожидается список списков
 	if #chosen_effects == 0 then
-		chosen_effects = { "levitation", 1, 1.8 }
+		chosen_effects = { { "levitation", 1, 1.8 } }
 	end
 
 	return {

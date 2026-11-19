@@ -1006,7 +1006,7 @@ core.register_node(HEART, {
 	drop = "",
 	light_source = 7,
 	_mcl_hardness = 0.8,
-	_mcl_blast_resistance = 1200, -- Защита от взрывов криперов внутри улья
+	_mcl_blast_resistance = 3, -- Защита от взрывов криперов внутри улья
 	on_timer = grow,
 	after_dig_node = function(pos, oldnode, oldmetadata, digger)
 		local fields = oldmetadata and oldmetadata.fields or {}

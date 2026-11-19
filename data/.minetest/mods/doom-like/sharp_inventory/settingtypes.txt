@@ -1,0 +1,30 @@
+# Dark theme for Mineclonia's screens, using this mod's own textures.
+sharp_inventory.theme (Dark theme) bool true
+
+# Optional tint for the theme's textures, as #RRGGBB. They are multiplied
+# by it, so darker values darken the theme. Leave empty for no tint.
+sharp_inventory.shade (Theme tint, #RRGGBB) string
+
+# Color for labels and text fields, replacing Mineclonia's dark gray.
+sharp_inventory.text_color (Text color, #RRGGBB) string #E0E0E0
+
+# Move Advancements, Help and Player settings into a column beside the
+# player model and the Recipe book next to Fill Craft Grid. This frees the
+# space where the survival inventory's auto-sort switch sits; with this
+# off, the inventory switch is only on the creative inventory.
+sharp_inventory.relayout (Survival button column) bool true
+
+# Inventory auto-sort state for players who have never pressed the
+# inventory switch. Chests nobody has set yet, and each
+# player's shulker box and ender chest switches until pressed, follow the
+# inventory switch of whoever uses them.
+sharp_inventory.autosort_default (Inventory auto-sort on by default) bool false
+
+# Seconds between automatic sorts of the player inventory while no screen
+# is being used. The hotbar is never sorted.
+sharp_inventory.autosort_interval (Player inventory sort interval) float 2 0.5 60
+
+# Theme and add the buttons to furnace and shulker box screens already
+# stored in the world, as their blocks load. These stay changed if the
+# mod is removed later (they still work, they just look dark).
+sharp_inventory.update_stored_formspecs (Update furnaces and shulker boxes in the world) bool true

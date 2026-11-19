@@ -15,9 +15,16 @@ load_mod_mcl_random_plant_positions = true
 load_mod_light_works = true
 load_mod_vein_miner = true
 load_mod_mail = true
+
 load_mod_mcl_siege_common = true
 load_mod_mcl_siege_zombies = true
 load_mod_mcl_siege_skeletons = true
 load_mod_mcl_siege_creepers = true
 load_mod_mcl_siege_witches = true
 load_mod_mcl_siege_hives = true
+
+load_mod_ambience = true
+load_mod_sharp_map = true
+load_mod_accuracy = true
+load_mod_rifles = true
+load_mod_doomlike = true

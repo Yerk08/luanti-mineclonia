@@ -362,8 +362,8 @@ return function(hive)
 		})
 		mcl_mobs.register_egg(name, description, color, "#211324", 0)
 	end
-	register_queen(names[1], S("Vespera, Queen of Dusk"), "#A751E1", 120, 4.1, "darkness")
-	register_queen(names[2], S("Kharza, Queen of Embers"), "#E64D40", 145, 4.55, "weakness")
+	register_queen(names[1], S("Vespera, Queen of Dusk"), "#A751E1", 30, 4.1, "darkness")
+	register_queen(names[2], S("Kharza, Queen of Embers"), "#E64D40", 40, 4.55, "weakness")
 	local base = mobs_mc.monster_spawner
 	local queen_spawner = table.merge(base, {
 		name = names[1],
