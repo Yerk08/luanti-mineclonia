@@ -1,0 +1,2 @@
+[hidenicks]
+hidenicks_mode (Hidenicks: режим по умолчанию) enum none none,all,hidden,team

@@ -1,0 +1,8 @@
+[General]
+deadcount_hud (Показывать счётчик смертей на экране) bool true
+deadcount_max_rows (Максимум строк в HUD; 0 — показывать всех) int 10 0 100
+deadcount_name_width (Ширина колонки ника, символы) int 18 8 32
+deadcount_map_y (Положение «под картой»: доля высоты экрана) float 0.30 0.10 0.80
+deadcount_margin (Отступ HUD от края, пиксели) int 8 0 100
+deadcount_neutral_color (Нейтральный цвет ников) string #E0E0E0
+deadcount_infected_color (Цвет заражённых) string #55FF55

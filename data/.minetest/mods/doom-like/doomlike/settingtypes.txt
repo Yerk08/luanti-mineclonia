@@ -1,6 +1,7 @@
 [doomlike]
 doomlike_speed_multiplier (Doom-like: множитель скорости) float 1.6 0.1 10.0
 doomlike_jump_multiplier (Doom-like: множитель прыжка) float 1.4 0.1 10.0
-doomlike_mob_cap_multiplier (Doom-like: множитель лимита монстров) float 2.0 1.0 10.0
-doomlike_shell_target (Doom-like: патронов у SPAS-12/Jackhammer) int 50 1 500
-doomlike_ammo_refill_interval (Doom-like: интервал пополнения патронов, сек) float 10 1 300
+doomlike_mob_cap_multiplier (Doom-like: множитель лимита монстров; 0 — выключить) float 1.5 0.0 10.0
+doomlike_babaha_reload (Doom-like: перезарядка Бабахи, сек) float 3.0 0.5 10.0
+doomlike_babaha_damage (Doom-like: прямой урон Бабахи) int 40 1 200
+doomlike_babaha_speed (Doom-like: скорость снаряда Бабахи) float 40 10 200

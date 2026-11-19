@@ -23,8 +23,14 @@ load_mod_mcl_siege_creepers = true
 load_mod_mcl_siege_witches = true
 load_mod_mcl_siege_hives = true
 
-load_mod_ambience = true
-load_mod_sharp_map = true
 load_mod_accuracy = true
+load_mod_ambience = true
 load_mod_rifles = true
+load_mod_sharp_inventory = true
+load_mod_sharp_map = true
+load_mod_vein_miner = true
 load_mod_doomlike = true
+load_mod_nightvision = true
+load_mod_doomspawn = true
+load_mod_deadcount = true
+load_mod_hidenicks = true

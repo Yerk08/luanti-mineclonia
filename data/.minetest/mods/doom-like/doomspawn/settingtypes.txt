@@ -1,0 +1,5 @@
+[General]
+doomspawn_enabled (Doom Spawn: включён по умолчанию) bool true
+doomspawn_radius (Doom Spawn: радиус воздушного спавна; 0 — без разброса) int 50 0 1000
+doomspawn_invuln (Doom Spawn: секунды неуязвимости после спавна; 0 — выключено) int 5 0 60
+doomspawn_fall_protection (Doom Spawn: секунды защиты от урона падением после воздушного спавна; 0 — выключено) int 10 0 60
