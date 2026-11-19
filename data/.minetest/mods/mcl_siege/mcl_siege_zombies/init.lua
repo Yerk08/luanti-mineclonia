@@ -21,7 +21,7 @@ core.register_on_mods_loaded(function()
 	mcl_siege.configure_spawns("mobs_mc:zombie", configure_horde)
 	mcl_siege.configure_spawns("mobs_mc:husk", function(spawner)
 		configure_horde(spawner)
-		spawner.weight = 220
+		spawner.weight = 320
 	end)
 end)
 
