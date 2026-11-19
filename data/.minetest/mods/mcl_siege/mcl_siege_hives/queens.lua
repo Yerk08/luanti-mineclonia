@@ -315,7 +315,7 @@ return function(hive)
 					for _, obj in ipairs(core.get_objects_inside_radius(pos, 2.7)) do
 						if obj:is_player() and mcl_siege.is_survival_player(obj) then
 							self._ember_hit_cd = 0.85
-							mcl_util.deal_damage(obj, 12, {
+							mcl_util.deal_damage(obj, 7, {
 								type = "mob",
 								source = self.object,
 								direct = self.object,
@@ -623,7 +623,7 @@ return function(hive)
 		mcl_mobs.register_egg(name, description, color, "#211324", 0)
 	end
 	register_queen(names[1], S("Vespera, Queen of Dusk"), "#A751E1", 60, 4.6, 8, "darkness", "jump")
-	register_queen(names[2], S("Kharza, Queen of Embers"), "#E64D40", 70, 7.4, 11, "weakness", "run")
+	register_queen(names[2], S("Kharza, Queen of Embers"), "#E64D40", 70, 7.4, 6, "weakness", "run")
 	local base = mobs_mc.monster_spawner
 	local queen_spawner = table.merge(base, {
 		name = names[1],
