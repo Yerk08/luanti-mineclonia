@@ -246,7 +246,9 @@ for _, kind in ipairs({ "zombie", "baby_zombie", "husk", "baby_husk" }) do
 			self._breaking_door = nil
 			return old_ai_step(self, dtime)
 		end
-		def.can_spawn_reinforcements = installed_reinforcement_limit(def.can_spawn_reinforcements)
+		if def.can_spawn_reinforcements then
+			def.can_spawn_reinforcements = installed_reinforcement_limit(def.can_spawn_reinforcements)
+		end
 		if siege_enabled then
 			local rules = table.copy(def._targeting_rules)
 			-- Увеличили дистанцию агра с 24 до 40 блоков, чтобы весь отряд шел на игрока
