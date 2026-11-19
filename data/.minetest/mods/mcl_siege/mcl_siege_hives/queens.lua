@@ -115,6 +115,114 @@ return function(hive)
 		end
 	end
 
+	-- Рывок-отступление для Весперы (уход от игрока + боковой стрейф)
+	local function dash_away(self, pos, target_pos)
+		local away = vector.direction(target_pos, pos)
+		away.y = 0
+		if vector.length(away) < 0.01 then
+			away = vector.new(1, 0, 0)
+		else
+			away = vector.normalize(away)
+		end
+		local side = vector.new(-away.z, 0, away.x)
+		local strafe_sign = (math.random(2) == 1) and 1 or -1
+		local dir = vector.normalize(vector.add(vector.multiply(away, 1.2), vector.multiply(side, 0.85 * strafe_sign)))
+
+		self.object:set_velocity({
+			x = dir.x * 13.5,
+			y = 4.2,
+			z = dir.z * 13.5,
+		})
+		core.sound_play("mobs_mc_enderman_teleport_src", {
+			pos = pos,
+			gain = 0.65,
+			pitch = 1.35,
+			max_hear_distance = 22,
+		}, true)
+		core.add_particlespawner({
+			amount = 24,
+			time = 0.15,
+			minpos = vector.subtract(pos, 0.5),
+			maxpos = vector.add(pos, 0.8),
+			minvel = { x = -2.5, y = 0.5, z = -2.5 },
+			maxvel = { x = 2.5, y = 2.5, z = 2.5 },
+			minexptime = 0.3,
+			maxexptime = 0.6,
+			glow = 12,
+			texture = "mcl_particles_effect.png^[colorize:#A751E1:220",
+		})
+	end
+
+	-- Прыжок на игрока для Харзы с ударной волной при приземлении
+	local function leap_at_target(self, pos, target_pos)
+		local dir = vector.direction(pos, target_pos)
+		dir.y = 0
+		if vector.length(dir) < 0.01 then
+			return
+		end
+		dir = vector.normalize(dir)
+		local dist = math.min(vector.distance(pos, target_pos), 12)
+		local h_speed = math.max(9.5, dist * 1.15)
+
+		self.object:set_velocity({
+			x = dir.x * h_speed,
+			y = 7.2,
+			z = dir.z * h_speed,
+		})
+		self._kharza_leaping = true
+		self._kharza_leap_time = 0
+		core.sound_play("mobs_mc_spider_attack", {
+			pos = pos,
+			gain = 1.0,
+			pitch = 0.75,
+			max_hear_distance = 24,
+		}, true)
+	end
+
+	local function handle_kharza_landing(self, pos, dtime)
+		if not self._kharza_leaping then
+			return
+		end
+		self._kharza_leap_time = (self._kharza_leap_time or 0) + dtime
+		local vel = self.object:get_velocity()
+		if self._kharza_leap_time > 0.25 and vel and math.abs(vel.y) < 0.2 then
+			self._kharza_leaping = false
+			-- Ударная волна в радиусе 3.2 блока при приземлении
+			core.add_particlespawner({
+				amount = 36,
+				time = 0.15,
+				minpos = vector.offset(pos, -2.5, 0.1, -2.5),
+				maxpos = vector.offset(pos, 2.5, 0.6, 2.5),
+				minvel = { x = -3.5, y = 1.2, z = -3.5 },
+				maxvel = { x = 3.5, y = 3.0, z = 3.5 },
+				minexptime = 0.35,
+				maxexptime = 0.7,
+				glow = 14,
+				texture = "mcl_particles_effect.png^[colorize:#E64D40:230",
+			})
+			core.sound_play("tnt_explode", {
+				pos = pos,
+				gain = 0.45,
+				pitch = 1.35,
+				max_hear_distance = 20,
+			}, true)
+			for _, obj in ipairs(core.get_objects_inside_radius(pos, 3.2)) do
+				if obj:is_player() and mcl_siege.is_survival_player(obj) then
+					mcl_util.deal_damage(obj, 5, {
+						type = "mob",
+						source = self.object,
+						direct = self.object,
+					})
+					local push = vector.direction(pos, obj:get_pos())
+					push.y = 0.35
+					obj:add_velocity(vector.multiply(vector.normalize(push), 7.5))
+				end
+			end
+		elseif self._kharza_leap_time > 2.2 then
+			self._kharza_leaping = false
+		end
+	end
+
 	-- Вызволение королевы, если растущий кокон накрыл её блоками
 	local function unstuck_from_blocks(self, pos)
 		local check_pos = vector.round(vector.offset(pos, 0, 0.5, 0))
@@ -180,6 +288,9 @@ return function(hive)
 		if not pos then
 			return
 		end
+		if self._siege_mobility == "jump" then
+			handle_kharza_landing(self, pos, dtime)
+		end
 		if self:check_timer("siege_unstuck", 1.0) then
 			unstuck_from_blocks(self, pos)
 		end
@@ -238,7 +349,6 @@ return function(hive)
 			end
 		end
 	end
-
 	local function attack_melee(self, attach_pos, pos, dtime, target_pos, visible)
 		local target = self.attack
 		if not target or not target:is_player() or not mcl_siege.is_survival_player(target) then
@@ -247,12 +357,12 @@ return function(hive)
 		end
 		local state = combat[self]
 		if not state or state.target ~= target then
-			state = { target = target, cooldown = 3.0, spit_cd = 1.5 }
+			state = { target = target, cooldown = 3.0, spit_cd = 1.5, move_cd = 2.0 }
 			combat[self] = state
 		end
 		state.cooldown = state.cooldown - dtime
 		state.spit_cd = state.spit_cd - dtime
-
+		state.move_cd = state.move_cd - dtime
 		if state.spell then
 			local spell = state.spell
 			spell.remaining = spell.remaining - dtime
@@ -263,18 +373,35 @@ return function(hive)
 			end
 			return
 		end
-
 		local distance = vector.distance(pos, target_pos)
-
+		local low_hp = self.health <= self.initial_properties.hp_max * 0.5
+		-- Веспера: убегает/делает рывок в сторону при сближении или при низком здоровье
+		if self._siege_mobility == "run" and state.move_cd <= 0 and visible then
+			if distance < (low_hp and 7.5 or 5.0) then
+				state.move_cd = low_hp and 2.4 or 3.6
+				state.spit_cd = math.min(state.spit_cd, 0.5)
+				self:look_at(target_pos)
+				dash_away(self, pos, target_pos)
+				return
+			end
+		end
+		-- Харза: прыгает на игрока со средней дистанции
+		if self._siege_mobility == "jump" and state.move_cd <= 0 and visible then
+			if distance >= 4.2 and distance <= 14.0 then
+				state.move_cd = low_hp and 3.0 or 4.5
+				self:look_at(target_pos)
+				leap_at_target(self, pos, target_pos)
+				return
+			end
+		end
 		if state.spit_cd <= 0 and visible and distance >= 3.5 and distance <= 16 then
 			state.spit_cd = math.random(3, 5)
 			self:look_at(target_pos)
 			spit_acid(self, pos, target_pos)
 		end
-
 		if state.cooldown <= 0 and visible and distance <= 13 then
 			state.spell = { pos = target_pos, remaining = WARNING }
-			state.cooldown = self.health <= self.initial_properties.hp_max / 2 and 7.5 or 10.5
+			state.cooldown = low_hp and 7.5 or 10.5
 			self:cancel_navigation()
 			self:halt_in_tracks()
 			self:look_at(target_pos)
@@ -282,24 +409,19 @@ return function(hive)
 			mcl_siege.rune(target_pos, RADIUS, self._siege_color, WARNING)
 			return
 		end
-
 		return mob.attack_melee(self, attach_pos, pos, dtime, target_pos, visible)
 	end
-
 	local function attack_end(self)
 		combat[self] = nil
 		return mob.attack_end(self)
 	end
-
 	local function on_die(self)
 		hive.seal(self._siege_heart, self._siege_queen_id)
 	end
-
 	local function target_survival_player(_, _, object)
 		return mcl_siege.is_survival_player(object)
 	end
-
-	local function register_queen(name, description, color, health, speed, effect)
+	local function register_queen(name, description, color, health, speed, effect, mobility)
 		mcl_mobs.register_mob(name, {
 			description = description,
 			type = "monster",
@@ -348,6 +470,7 @@ return function(hive)
 			},
 			_siege_pulse_effect = effect,
 			_siege_color = color,
+			_siege_mobility = mobility,
 			_targeting_rules = {
 				mcl_mobs.build_nearest_target_rule("player", target_survival_player, nil, nil, 16),
 			},
@@ -362,13 +485,22 @@ return function(hive)
 				if reason and reason.type == "suffocation" then
 					return 0
 				end
+				-- Веспера дополнительно уходит рывком при получении урона в ближнем бою
+				if self._siege_mobility == "run" and damage > 0 and combat[self] and combat[self].move_cd <= 1.0 then
+					local pos = self.object:get_pos()
+					local target = combat[self].target
+					if pos and target and target:is_valid() then
+						combat[self].move_cd = 2.5
+						dash_away(self, pos, target:get_pos())
+					end
+				end
 				return mob.receive_damage(self, reason, damage)
 			end,
 		})
 		mcl_mobs.register_egg(name, description, color, "#211324", 0)
 	end
-	register_queen(names[1], S("Vespera, Queen of Dusk"), "#A751E1", 60, 4.1, "darkness")
-	register_queen(names[2], S("Kharza, Queen of Embers"), "#E64D40", 70, 4.55, "weakness")
+	register_queen(names[1], S("Vespera, Queen of Dusk"), "#A751E1", 60, 4.35, "darkness", "run")
+	register_queen(names[2], S("Kharza, Queen of Embers"), "#E64D40", 70, 4.55, "weakness", "jump")
 	local base = mobs_mc.monster_spawner
 	local queen_spawner = table.merge(base, {
 		name = names[1],
