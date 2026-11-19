@@ -12,10 +12,10 @@ local ACID = prefix .. "acid"
 local NEST = prefix .. "nest"
 local CACHE = prefix .. "cache"
 
-local CELL_SIZE = 112
-local MIN_SPACING = 96
+local CELL_SIZE = 64
+local MIN_SPACING = 48
 -- Фазы радиуса: 2 -> 4 -> 7 -> 15 -> 20
-local PHASE_RADII = { 2, 4, 7, 15, 20 }
+local PHASE_RADII = { 2, 4, 7, 15}
 local MAX_PHASE = #PHASE_RADII
 local CARDINAL = { { 1, 0 }, { 0, 1 }, { -1, 0 }, { 0, -1 } }
 
@@ -30,11 +30,11 @@ local soft_shell_groups = {
 
 -- Экспоненциальное замедление скорости роста по фазам
 local function get_step_interval(phase)
-	return 0.5 * phase
+	return 1.5 * phase
 end
 
 local function get_phase_pause(phase)
-	return 0.5 * phase
+	return 3.5 * phase
 end
 
 local function cell_key(x, z)
