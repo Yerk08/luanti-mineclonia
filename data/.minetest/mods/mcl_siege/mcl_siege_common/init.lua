@@ -1,10 +1,12 @@
 local siege = {}
 mcl_siege = siege
 
--- Mineclonia indexes these definitions and calculates total weights at mods_loaded.
 function siege.configure_spawns(name, configure)
+	if not (mcl_mobs and mcl_mobs.registered_spawners) then
+		return
+	end
 	for _, spawner in ipairs(mcl_mobs.registered_spawners) do
-		if spawner.name == name and #spawner.biomes > 0 then
+		if spawner.name == name then
 			configure(spawner)
 		end
 	end
@@ -55,41 +57,34 @@ end
 
 -- Крупные отряды и высокий вес спавна для всех врагов
 local horde_roster = {
-	["mobs_mc:zombie"]         = { weight = 500, min = 3, max = 10 },
-	["mobs_mc:husk"]           = { weight = 400, min = 3, max = 10 },
-	["mobs_mc:skeleton"]       = { weight = 130, min = 4, max = 9 },
-	["mobs_mc:stray"]          = { weight = 120, min = 4, max = 9 },
-	["mobs_mc:bogged"]         = { weight = 120, min = 4, max = 9 },
-	["mobs_mc:spider"]         = { weight = 130, min = 4, max = 8 },
-	["mobs_mc:pillager"]       = { weight = 80,  min = 4, max = 8 },
-	["mobs_mc:enderman"]       = { weight = 55,  min = 2, max = 4 },
-	["mobs_mc:vindicator"]     = { weight = 55,  min = 3, max = 6 },
-	["mobs_mc:evoker"]         = { weight = 30,  min = 1, max = 3 },
-	["mobs_mc:phantom"]        = { weight = 70,  min = 3, max = 6 },
+	["mobs_mc:zombie"]     = { weight = 500, min = 3, max = 10 },
+	["mobs_mc:husk"]       = { weight = 400, min = 3, max = 10 },
+	["mobs_mc:skeleton"]   = { weight = 130, min = 4, max = 9 },
+	["mobs_mc:stray"]      = { weight = 120, min = 4, max = 9 },
+	["mobs_mc:bogged"]     = { weight = 120, min = 4, max = 9 },
+	["mobs_mc:spider"]     = { weight = 130, min = 4, max = 8 },
+	["mobs_mc:pillager"]   = { weight = 80,  min = 4, max = 8 },
+	["mobs_mc:enderman"]   = { weight = 55,  min = 2, max = 4 },
+	["mobs_mc:vindicator"] = { weight = 55,  min = 3, max = 6 },
+	["mobs_mc:evoker"]     = { weight = 30,  min = 1, max = 3 },
+	["mobs_mc:phantom"]    = { weight = 70,  min = 3, max = 6 },
 }
 
-core.register_on_mods_loaded(function()
-	for mob_name, cfg in pairs(horde_roster) do
-		siege.configure_spawns(mob_name, function(spawner)
-			spawner.weight = cfg.weight
-			spawner.pack_min = cfg.min
-			spawner.pack_max = cfg.max
-			-- Снимаем жесткие лимиты на плотность конкретно этого моба в чанке
-			if spawner.max_spawn then
-				spawner.max_spawn = math.max(spawner.max_spawn * 3, 24)
-			end
-		end)
-	end
+-- Применяем сразу при загрузке файла (до индексации весов в mcl_mobs)
+for mob_name, cfg in pairs(horde_roster) do
+	siege.configure_spawns(mob_name, function(spawner)
+		spawner.weight = cfg.weight
+		spawner.pack_min = cfg.min
+		spawner.pack_max = cfg.max
+	end)
+end
 
-	-- Форсируем глобальные лимиты и скорость спавна Mineclonia
-	if type(mcl_mobs.spawning_interval) == "number" then
-		mcl_mobs.spawning_interval = 2 -- Спавн каждые 2 секунды вместо 5+
-	end
-	if type(mcl_mobs.max_mobs_per_player) == "number" then
-		mcl_mobs.max_mobs_per_player = math.max(mcl_mobs.max_mobs_per_player, 90)
-	end
-	if type(mcl_mobs.mob_cap) == "table" then
-		mcl_mobs.mob_cap.monster = math.max(mcl_mobs.mob_cap.monster or 70, 140)
+-- Корректируем актуальные лимиты категории monster в Mineclonia
+core.register_on_mods_loaded(function()
+	if mcl_mobs and mcl_mobs.spawn_categories
+			and mcl_mobs.spawn_categories.monster then
+		local monster = mcl_mobs.spawn_categories.monster
+		monster.chunk_mob_cap = math.max(monster.chunk_mob_cap or 70, 140)
+		monster.min_chunk_mob_cap = math.max(monster.min_chunk_mob_cap or 10, 25)
 	end
 end)
-
