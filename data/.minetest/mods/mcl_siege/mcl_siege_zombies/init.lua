@@ -66,19 +66,29 @@ local function find_block(pos, target_pos)
 		return
 	end
 	local reach = math.min(length, 1.8)
-	for _, height in ipairs({ 1.45, 0.95, 0.45 }) do
+	local closest_node = nil
+	local min_dist = math.huge
+
+	-- Проверяем снизу вверх (0.45 - ноги, 0.95 - тело, 1.45 - голова)
+	for _, height in ipairs({ 0.45, 0.95, 1.45 }) do
 		local start = vector.offset(pos, 0, height, 0)
 		local finish = vector.offset(start, dx * reach / length, 0, dz * reach / length)
 		for hit in core.raycast(start, finish, false, false) do
 			if hit.type == "node" then
 				local allowed = can_break(hit.under)
 				if allowed then
-					return hit.under
+					local dist = vector.distance(start, hit.intersection_point)
+					if dist < min_dist then
+						min_dist = dist
+						closest_node = hit.under
+					end
 				end
 				break
 			end
 		end
 	end
+
+	return closest_node
 end
 
 local function attack_melee(self, attach_pos, pos, dtime, target_pos, visible)
