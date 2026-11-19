@@ -4,17 +4,7 @@ return function(hive)
 	local storage = core.get_mod_storage()
 	local mob = mcl_mobs.mob_class
 	local combat = setmetatable({}, { __mode = "k" })
-	local CHECK_SITES = {
-		{ 2, 0 },
-		{ 0, 2 },
-		{ -2, 0 },
-		{ 0, -2 },
-		{ 3, 3 },
-		{ -3, 3 },
-		{ -3, -3 },
-		{ 3, -3 },
-		{ 0, 0 },
-	}
+
 	local WARNING, RADIUS = 1.5, 4.0
 	local names = { modname .. ":vespera", modname .. ":kharza" }
 
@@ -151,6 +141,22 @@ return function(hive)
 		end
 	end
 
+	local function try_found(self, pos)
+		if mcl_worlds.pos_to_dimension(pos) ~= "overworld" then
+			return
+		end
+		local candidate = vector.round(vector.offset(pos, 0, 0.2, 0))
+		if hive.found(candidate, self.description, self._siege_queen_id) then
+			self._siege_heart = candidate
+			self:restrict_to(candidate, 26)
+			core.sound_play("mobs_mc_spider_attack", {
+				pos = candidate,
+				gain = 1,
+				max_hear_distance = 28,
+			}, true)
+		end
+	end
+
 	local function on_spawn(self)
 		if not self._siege_queen_id then
 			local serial = storage:get_int("queen_serial") + 1
@@ -160,32 +166,12 @@ return function(hive)
 		self.nametag = ""
 		if self.object then
 			self.object:set_nametag_attributes({ text = "" })
-		end
-		return true
-	end
-
-	local function try_found(self, pos)
-		if mcl_worlds.pos_to_dimension(pos) ~= "overworld" then
-			return
-		end
-		local origin = vector.round(vector.offset(pos, 0, 0.5, 0))
-		if not hive.site_available(origin) then
-			return
-		end
-		for _, offset in ipairs(CHECK_SITES) do
-			local ox, oz = unpack(offset)
-			local candidate = vector.offset(origin, ox, 0, oz)
-			if hive.found(candidate, self.description, self._siege_queen_id) then
-				self._siege_heart = candidate
-				self:restrict_to(candidate, 26)
-				core.sound_play("mobs_mc_spider_attack", {
-					pos = candidate,
-					gain = 1,
-					max_hear_distance = 28,
-				}, true)
-				return
+			local pos = self.object:get_pos()
+			if pos and mcl_vars.difficulty ~= 0 and not self._siege_heart then
+				try_found(self, pos)
 			end
 		end
+		return true
 	end
 
 	local function ai_step(self, dtime)
@@ -197,20 +183,39 @@ return function(hive)
 		if self:check_timer("siege_unstuck", 1.0) then
 			unstuck_from_blocks(self, pos)
 		end
-		if mcl_vars.difficulty == 0 or not self:check_timer("siege_hive", 4) then
+		if mcl_vars.difficulty == 0 then
 			return
 		end
+
+		-- Отсчёт перезарядки перед постройкой нового улья
+		if self._rebuild_cd and self._rebuild_cd > 0 then
+			self._rebuild_cd = self._rebuild_cd - dtime
+			return
+		end
+
 		local anchor = self._siege_heart
 		if not anchor then
-			try_found(self, pos)
-		else
-			local actual = hive.locate_heart(anchor, self._siege_queen_id)
-			if actual then
-				self._siege_heart = actual
-				if vector.distance(actual, pos) <= 12 then
-					self.health = math.min(self.initial_properties.hp_max, self.health + 2)
-				end
+			if self:check_timer("siege_found", 1.0) then
+				try_found(self, pos)
 			end
+			return
+		end
+		if not self:check_timer("siege_hive", 4) then
+			return
+		end
+		local actual = hive.locate_heart(anchor, self._siege_queen_id)
+		if actual then
+			self._siege_heart = actual
+			if vector.distance(actual, pos) <= 12 then
+				self.health = math.min(self.initial_properties.hp_max, self.health + 2)
+			end
+		else
+			-- Улей разрушен: сбрасываем привязку и даём паузу 30 секунд перед постройкой следующего
+			self._siege_heart = nil
+			self._rebuild_cd = 30
+			local serial = storage:get_int("queen_serial") + 1
+			storage:set_int("queen_serial", serial)
+			self._siege_queen_id = tostring(serial)
 		end
 	end
 
@@ -362,8 +367,8 @@ return function(hive)
 		})
 		mcl_mobs.register_egg(name, description, color, "#211324", 0)
 	end
-	register_queen(names[1], S("Vespera, Queen of Dusk"), "#A751E1", 30, 4.1, "darkness")
-	register_queen(names[2], S("Kharza, Queen of Embers"), "#E64D40", 40, 4.55, "weakness")
+	register_queen(names[1], S("Vespera, Queen of Dusk"), "#A751E1", 60, 4.1, "darkness")
+	register_queen(names[2], S("Kharza, Queen of Embers"), "#E64D40", 70, 4.55, "weakness")
 	local base = mobs_mc.monster_spawner
 	local queen_spawner = table.merge(base, {
 		name = names[1],

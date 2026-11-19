@@ -30,11 +30,11 @@ local soft_shell_groups = {
 
 -- Экспоненциальное замедление скорости роста по фазам
 local function get_step_interval(phase)
-	return 0.1 * (2 ^ (phase - 1)) -- 0.03s -> 0.06s -> 0.12s -> 0.24s -> 0.48s
+	return 0 -- 1.0
 end
 
 local function get_phase_pause(phase)
-	return 8.5 * (3 ^ (phase - 1)) -- 0.5s -> 1.5s -> 4.5s -> 13.5s -> 40.5s
+	return 0 -- 4.5 * (3 ^ (phase - 1))
 end
 
 local function cell_key(x, z)
@@ -137,15 +137,17 @@ local function open(pos)
 end
 
 function hive.can_found(pos)
-	if core.get_node(pos).name ~= "air" or not mcl_siege.standable(pos, 3) or core.is_protected(pos, "") then
+	if core.is_protected(pos, "") then
 		return false
 	end
-	for _, direction in ipairs(CARDINAL) do
-		local dx, dz = unpack(direction)
-		local near = vector.offset(pos, dx, 0, dz)
-		if not open(near) or core.is_protected(near, "") then
-			return false
-		end
+	local node = core.get_node(pos)
+	local def = core.registered_nodes[node.name]
+	-- Разрешаем ставить в воздух, траву, цветы, снег, листву и любые не-твёрдые или разрушаемые блоки (кроме воды/лавы и нерушимых)
+	if not def or node.name == "ignore" or def.liquidtype ~= "none" then
+		return false
+	end
+	if core.get_item_group(node.name, "unbreakable") > 0 or def.can_dig == false then
+		return false
 	end
 	return true
 end
@@ -269,9 +271,9 @@ local function generate_cocoon_plan(phase, seed)
 			for dz = -rz - 2, rz + 2 do
 				local angle = math.atan2(dz, dx)
 				local y_ratio = dy >= 0 and (dy / ry) or (-dy / y_depth)
-				local ribs = math.sin(angle * 5 + seed * 0.1) * 0.10
-				local waist = (dy >= 0) and (-math.sin(y_ratio * math.pi) * 0.13) or 0
-				local spire = (dy > 0 and y_ratio > 0.7) and (math.cos(angle * 3 - y_ratio * 4) * 0.11) or 0
+				local ribs = math.sin(angle * 5 + seed * 0.1) * 0.06
+				local waist = (dy >= 0) and (-math.sin(y_ratio * math.pi) * 0.08) or 0
+				local spire = (dy > 0 and y_ratio > 0.7) and (math.cos(angle * 3 - y_ratio * 4) * 0.07) or 0
 				local warp = 1.0 + ribs + waist + spire
 
 				local eff_rx = rx * warp
@@ -287,35 +289,36 @@ local function generate_cocoon_plan(phase, seed)
 					local prev_depth = math.max(5, math.min(16, math.floor(prev_r * 0.65) + (phase - 1) * 2))
 					local prev_dy = dy + 2
 					local prev_y_scale = prev_dy < 0 and prev_depth or prev_ry
-					local prev_dist_sq = (dx / (prev_r - 0.5)) ^ 2
+					local safe_prev_r = math.max(1.5, prev_r - 1.5)
+					local prev_dist_sq = (dx / safe_prev_r) ^ 2
 						+ (prev_dy / prev_y_scale) ^ 2
-						+ (dz / (prev_r - 0.5)) ^ 2
-					if prev_dist_sq < 0.94 then
+						+ (dz / safe_prev_r) ^ 2
+					if prev_dist_sq < 0.85 then
 						inside_previous = true
 					end
 				end
 
 				if dist_sq <= 1.0 and not inside_previous then
-					local shell_threshold = rx <= 5 and 0.65 or (rx <= 10 and 0.78 or 0.88)
+					-- Плотная многослойная стенка толщиной 2-3 блока на любой фазе
+					local shell_threshold = rx <= 5 and 0.52 or (rx <= 10 and 0.64 or 0.72)
 					local is_shell = dist_sq >= shell_threshold
 
 					if is_shell then
-						local outer_hole = (dy >= 4) and (math.abs(dx * 11 + dy * 17 + dz * 23 + seed) % 29 == 0)
-						if outer_hole then
-							set_cell(dx, dy, dz, WEB)
+						-- Чередуем хитиновый панцирь, тёмные рёбра и вкрапления живой слизи
+						local pattern = math.abs(dx * 7 + dy * 13 + dz * 19 + seed) % 11
+						if pattern <= 1 then
+							set_cell(dx, dy, dz, SLIME)
+						elseif pattern <= 4 then
+							set_cell(dx, dy, dz, RIB)
 						else
-							local vein = ((dx + dz + dy + seed) % 6 == 0)
-							set_cell(dx, dy, dz, vein and RIB or SHELL)
+							set_cell(dx, dy, dz, SHELL)
 						end
 					elseif dy < -1 then
+						-- Монолитное глубокое основание под коконом без дыр
 						set_cell(dx, dy, dz, (radial <= rx * 0.45) and SLIME or RIB)
 					elseif dy == -1 then
-						local floor_hole = (radial > 3.5) and (math.abs(dx * 7 + dz * 13 + seed) % 9 == 0)
-						if floor_hole then
-							set_cell(dx, dy, dz, "air")
-						else
-							set_cell(dx, dy, dz, (radial <= rx * 0.35) and SLIME or RIB)
-						end
+						-- Сплошной упругий пол на уровне сердца
+						set_cell(dx, dy, dz, (radial <= rx * 0.4) and SLIME or RIB)
 					else
 						local is_tier_floor = (dy >= 4) and (dy % 4 == 0) and (dy <= ry - 3)
 						if is_tier_floor then
@@ -438,7 +441,7 @@ local function get_plan(phase, seed)
 	return plan_cache[key]
 end
 function hive.found(pos, name, id)
-	if not hive.can_found(pos) or not hive.site_available(pos) or occupied(pos, 1.0) then
+	if not hive.can_found(pos) or not hive.site_available(pos) then
 		return false
 	end
 	core.set_node(pos, { name = HEART })
@@ -447,6 +450,7 @@ function hive.found(pos, name, id)
 	meta:set_string("queen_name", name)
 	meta:set_int("phase", 1)
 	meta:set_int("cursor", 1)
+	meta:set_int("ground_y", pos.y)
 	meta:set_int("lift_steps", 0)
 	meta:set_int("seed", math.random(1, 999))
 	meta:set_string("infotext", S("Hive heart of @1", name))
@@ -479,6 +483,7 @@ local function elevate_heart(pos, meta, resume_timer)
 	new_meta:set_string("queen_name", qname)
 	new_meta:set_int("phase", phase)
 	new_meta:set_int("cursor", cursor)
+	new_meta:set_int("ground_y", meta:get_int("ground_y"))
 	new_meta:set_int("seed", seed)
 	new_meta:set_int("sealed", sealed)
 	new_meta:set_int("lift_steps", lifts + 1)
@@ -491,29 +496,24 @@ end
 
 -- Эффектное раскрытие созревшего кокона (разворот на 8 лепестков) и выброс огромной орды зомби
 local function hatch_cocoon(heart_pos, max_r)
+	local y_min = -28 -- Захватываем всё глубокое основание кокона
 	local y_max = math.floor(max_r * 1.5) + 6
 	local petals = {}
 
-	-- 1. Раскрываем кокон как гигантский цветок: сносим верхний купол и прорезаем 8 широких лепестков до земли
+	-- 1. Раскрываем весь кокон целиком от шпиля до самого дна
 	for dx = -max_r - 3, max_r + 3 do
-		for dy = -6, y_max do
+		for dy = y_min, y_max do
 			for dz = -max_r - 3, max_r + 3 do
 				local dist = math.sqrt(dx * dx + dz * dz)
-				if dist <= max_r + 4 then
-					local angle = math.atan2(dz, dx)
-					local jagged_rim = math.sin(angle * 6) * 2
-					local open_everything = (dy >= -2 + jagged_rim)
-
-					if open_everything then
-						local p = vector.offset(heart_pos, dx, dy, dz)
-						local name = core.get_node(p).name
-						if is_existing_hive_block(name) and name ~= CACHE and name ~= HEART then
-							petals[#petals + 1] = {
-								pos = p,
-								-- Раскрывается эффектной волной от вершины купола вниз к основанию
-								score = -dy * 15 + dist,
-							}
-						end
+				if dist <= max_r + 4 and dy >= -10 then
+					local p = vector.offset(heart_pos, dx, dy, dz)
+					local name = core.get_node(p).name
+					if is_existing_hive_block(name) and name ~= HEART then
+						petals[#petals + 1] = {
+							pos = p,
+							-- Раскрывается эффектной волной сверху вниз до самого основания
+							score = -dy * 15 + dist,
+						}
 					end
 				end
 			end
@@ -584,7 +584,7 @@ local function hatch_cocoon(heart_pos, max_r)
 			local p = petals[idx].pos
 			idx = idx + 1
 			local node = core.get_node(p)
-			if is_existing_hive_block(node.name) and node.name ~= CACHE and not core.is_protected(p, "") then
+			if is_existing_hive_block(node.name) and not core.is_protected(p, "") then
 				core.remove_node(p)
 				removed = removed + 1
 				if removed % 14 == 0 then
@@ -895,30 +895,63 @@ local function nest_tick(pos)
 	end
 	return true
 end
+local CACHE_LOOT_POOL = {
+	-- Гарантированные или частые ценные ресурсы
+	{ item = "mcl_core:diamond", min = 2, max = 5, chance = 100 },
+	{ item = "mcl_core:emerald", min = 3, max = 8, chance = 90 },
+	{ item = "mcl_potions:regeneration_2", min = 1, max = 2, chance = 50 },
+	{ item = "mcl_potions:swiftness_2", min = 1, max = 2, chance = 50 },
+	
+	-- Тематические и боевые трофеи (в духе улья, паутины, яда и осады)
+	{ item = "mcl_core:apple_gold", min = 1, max = 2, chance = 45 },
+	{ item = "mcl_mobitems:slimeball", min = 6, max = 16, chance = 75 },
+	{ item = "mcl_mobitems:string", min = 8, max = 20, chance = 75 },
+	
+	-- Редкие джекпоты
+	{ item = "mcl_nether:netherite_scrap", min = 1, max = 2, chance = 25 },
+	{ item = "mcl_mobitems:echo_shard", min = 1, max = 3, chance = 30 },
+	{ item = "mcl_totems:totem", min = 1, max = 1, chance = 12 },
+}
 local function open_cache(pos, node, clicker)
 	if not clicker or not clicker:is_player() or core.is_protected(pos, clicker:get_player_name()) then
 		return
 	end
-	local heart, unloaded = part_heart(pos)
-	if heart or unloaded then
-		core.chat_send_player(clicker:get_player_name(), S("The hive heart still seals this cache."))
-		return
+
+	if core.get_node(pos).name == CACHE then
+		core.remove_node(pos)
 	end
-	core.remove_node(pos)
+
+	core.sound_play("default_break_glass", { pos = pos, gain = 0.8, pitch = 1.2 }, true)
+	core.add_particlespawner({
+		amount = 60,
+		time = 0.2,
+		minpos = vector.subtract(pos, 0.3),
+		maxpos = vector.add(pos, 0.3),
+		minvel = { x = -2, y = 2, z = -2 },
+		maxvel = { x = 2, y = 4, z = 2 },
+		minacc = { x = 0, y = -9.8, z = 0 },
+		maxacc = { x = 0, y = -9.8, z = 0 },
+		minexptime = 0.6,
+		maxexptime = 1.2,
+		texture = "default_gold_ingot.png",
+	})
+
 	local inventory = clicker:get_inventory()
-	for _, item in ipairs({
-		"mcl_core:gold_ingot 6",
-		"mcl_core:diamond 2",
-		"mcl_core:emerald 4",
-	}) do
-		local leftover = inventory:add_item("main", item)
-		if not leftover:is_empty() then
-			core.add_item(vector.offset(pos, 0, 0.5, 0), leftover)
+	for _, entry in ipairs(CACHE_LOOT_POOL) do
+		if math.random(100) <= entry.chance and core.registered_items[entry.item] then
+			local count = math.random(entry.min, entry.max)
+			local stack = ItemStack(entry.item .. " " .. count)
+			local leftover = inventory:add_item("main", stack)
+			if not leftover:is_empty() then
+				core.add_item(vector.offset(pos, 0, 0.5, 0), leftover)
+			end
 		end
 	end
 end
+
 -- Постепенный распад кокона после уничтожения сердца
 local function start_decay(center_pos, max_radius)
+	ground_y = ground_y or center_pos.y
 	local radius = math.max(max_radius + 6, 26)
 	local y_min = -36 -- Захватываем всё глубокое основание кокона ниже поднятого сердца
 	local y_max = math.floor(radius * 1.5) + 6
@@ -960,8 +993,14 @@ local function start_decay(center_pos, max_radius)
 			local p = targets[idx].pos
 			idx = idx + 1
 			local node = core.get_node(p)
-			if is_existing_hive_block(node.name) and node.name ~= CACHE and not core.is_protected(p, "") then
-				core.remove_node(p)
+						if is_existing_hive_block(node.name) and not core.is_protected(p, "") then
+				if p.y <= ground_y - 1 then
+					-- Глубоко под землёй возвращаем обычную землю
+					core.set_node(p, { name = "mcl_core:dirt" })
+				else
+					-- Всё, что выше земли, просто исчезает
+					core.remove_node(p)
+				end
 				removed = removed + 1
 				if removed % 8 == 0 then
 					core.add_particlespawner({
@@ -1003,7 +1042,7 @@ core.register_node(HEART, {
 	drop = "",
 	light_source = 7,
 	_mcl_hardness = 0.8,
-	_mcl_blast_resistance = 3, -- Защита от взрывов криперов внутри улья
+	_mcl_blast_resistance = 3,
 	on_timer = grow,
 	after_dig_node = function(pos, oldnode, oldmetadata, digger)
 		local fields = oldmetadata and oldmetadata.fields or {}
@@ -1011,9 +1050,26 @@ core.register_node(HEART, {
 		if id ~= "" then
 			storage:set_int("sealed_" .. id, 1)
 		end
+		local cx, cz = math.floor(pos.x / CELL_SIZE), math.floor(pos.z / CELL_SIZE)
+		storage:set_string(cell_key(cx, cz), "")
+
 		local phase = math.max(1, tonumber(fields.phase) or 1)
 		local max_r = PHASE_RADII[phase] or 20
-		start_decay(pos, max_r)
+		local ground_y = tonumber(fields.ground_y) or (pos.y - phase * 2)
+		start_decay(pos, max_r, ground_y)
+
+		-- Дроп с самого сердца в зависимости от фазы развития улья
+		local p = vector.offset(pos, 0, 0.3, 0)
+		core.add_item(p, "mcl_mobitems:slimeball " .. (phase * 3))
+		core.add_item(p, "mcl_experience:bottle " .. (phase * 2))
+
+		if phase >= 3 then
+			core.add_item(p, "mcl_core:diamond " .. (phase - 1))
+		end
+		if phase >= MAX_PHASE and core.registered_items["mcl_core:apple_gold_enchanted"] then
+			-- За победу над максимальным коконом до вылупления орды — супер-приз
+			core.add_item(p, "mcl_core:apple_gold_enchanted 1")
+		end
 	end,
 })
 core.register_node(SLIME, {
@@ -1027,7 +1083,12 @@ core.register_node(SLIME, {
 		fall_damage_add_percent = -85,
 		not_in_creative_inventory = 1,
 	},
-	drop = "",
+	drop = {
+	max_items = 1,
+	items = {
+		{ items = { "mcl_mobitems:slimeball" }, rarity = 4 },
+	},
+},
 	light_source = 3,
 	_mcl_hardness = 0.2,
 	_mcl_blast_resistance = 1,
@@ -1064,7 +1125,12 @@ core.register_node(WEB, {
 		dig_by_water = 1,
 		not_in_creative_inventory = 1,
 	},
-	drop = "",
+	drop = {
+	max_items = 1,
+	items = {
+		{ items = { "mcl_mobitems:string" }, rarity = 2 },
+	},
+},
 	_mcl_hardness = 0.15,
 })
 core.register_node(TRAP, {
@@ -1097,17 +1163,26 @@ core.register_node(NEST, {
 	description = S("Hive nursery"),
 	tiles = { "mob_spawner.png^[colorize:#2E8B75:75" },
 	groups = soft_shell_groups,
-	drop = "",
+	drop = {
+	max_items = 2,
+	items = {
+		{ items = { "mcl_experience:bottle 2" }, rarity = 1 },
+		{ items = { "mcl_mobitems:spider_eye" }, rarity = 2 },
+	},
+},
 	light_source = 4,
 	_mcl_hardness = 0.5,
 	on_timer = nest_tick,
 })
 core.register_node(CACHE, {
 	description = S("Sealed hive cache"),
-	tiles = { "mcl_blackstone_gilded_side.png" },
+	tiles = { "mcl_blackstone_gilded.png" },
 	groups = soft_shell_groups,
 	drop = "",
 	_mcl_hardness = 0.8,
 	on_rightclick = open_cache,
+	after_dig_node = function(pos, oldnode, oldmetadata, digger)
+		open_cache(pos, oldnode, digger)
+	end,
 })
 return hive
