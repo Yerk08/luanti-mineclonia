@@ -369,9 +369,9 @@ return function(hive)
 	end
 
 	local function try_found(self, pos)
-		if mcl_worlds.pos_to_dimension(pos) ~= "overworld" then
-			return
-		end
+		-- if mcl_worlds.pos_to_dimension(pos) ~= "overworld" then
+		-- 	return
+		-- end
 		local candidate = vector.round(vector.offset(pos, 0, 0.2, 0))
 		if hive.found(candidate, self.description, self._siege_queen_id) then
 			self._siege_heart = candidate
@@ -640,33 +640,39 @@ return function(hive)
 	register_queen(names[2], S("Kharza, Queen of Embers"), "#E64D40", 70, 7.4, 6, "weakness", "run")
 	local base = mobs_mc.monster_spawner
 	local queen_spawner = table.merge(base, {
-		name = names[1],
-		weight = 22,
-		pack_min = 1,
-		pack_max = 1,
-		biomes = {
-			"Plains",
-			"SunflowerPlains",
-			"Savannah",
-			"Meadow",
-			"Desert",
-			"SnowyPlains",
-			"Forest",
-			"BirchForest",
-			"SparseJungle",
-			"Taiga",
-			"Swamp",
-		},
-	})
-	function queen_spawner:test_spawn_position(spawn_pos, node_pos, data, cache, spawn_flag)
-		return not spawn_flag
-			and hive.natural_ready()
-			and mcl_worlds.pos_to_dimension(node_pos) == "overworld"
-			and base.test_spawn_position(self, spawn_pos, node_pos, data, cache, spawn_flag)
-			and mcl_weather.is_outdoor(node_pos)
-			and hive.site_available(node_pos)
-			and hive.can_found(node_pos)
-	end
+        name = names[2],
+        weight = 36,
+        pack_min = 1,
+        pack_max = 1,
+        max_light = 15, -- В Аду светло от лавы и огня
+        min_height = mcl_vars.mg_nether_min,
+        max_height = mcl_vars.mg_nether_max,
+        biomes = {
+            "Nether",
+            "SoulsandValley",
+            "CrimsonForest",
+            "WarpedForest",
+            "BasaltDelta",
+        },
+        nodes = {
+            "mcl_nether:netherrack",
+            "mcl_nether:soul_sand",
+            "mcl_nether:soul_soil",
+            "mcl_crimson:crimson_nylium",
+            "mcl_crimson:warped_nylium",
+            "mcl_blackstone:blackstone",
+            "mcl_blackstone:basalt",
+        },
+    })
+    function queen_spawner:test_spawn_position(spawn_pos, node_pos, data, cache, spawn_flag)
+        return not spawn_flag
+            and hive.natural_ready()
+            and mcl_worlds.pos_to_dimension(node_pos) == "nether"
+            and base.test_spawn_position(self, spawn_pos, node_pos, data, cache, spawn_flag)
+            -- mcl_weather.is_outdoor убрана, так как в Аду потолок
+            and hive.site_available(node_pos)
+            and hive.can_found(node_pos)
+    end
 	function queen_spawner:spawn(pos)
 		local object = core.add_entity(pos, names[math.random(#names)])
 		if object and object:is_valid() then

@@ -12,10 +12,10 @@ local ACID = prefix .. "acid"
 local NEST = prefix .. "nest"
 local CACHE = prefix .. "cache"
 
-local CELL_SIZE = 64
-local MIN_SPACING = 48
--- Фазы радиуса: 2 -> 4 -> 7 -> 15 -> 20
-local PHASE_RADII = { 2, 4, 7, 15 }
+local CELL_SIZE = 128
+local MIN_SPACING = 96
+-- Фазы радиуса: 2 -> 4 -> 7 -> 15 -> 30
+local PHASE_RADII = { 2, 4, 7, 15, 30 }
 local MAX_PHASE = #PHASE_RADII
 local CARDINAL = { { 1, 0 }, { 0, 1 }, { -1, 0 }, { 0, -1 } }
 
@@ -30,13 +30,12 @@ local soft_shell_groups = {
 
 -- Экспоненциальное замедление скорости роста по фазам
 local function get_step_interval(phase)
-	local intervals = { 1.2, 1.8, 2.2, 2.0 }
-	return intervals[phase] or 2.0
+	return 0.0
 end
 
 local function get_phase_pause(phase)
 	-- Пауза перед началом 2-й, 3-й и 4-й фаз (в секундах)
-	local pauses = { 0, 25, 60, 120 }
+	local pauses = { 25, 60, 60, 120, 240 }
 	return pauses[phase] or 30
 end
 
@@ -694,7 +693,7 @@ local function signal_phase_up(pos, phase)
 end
 
 local function send_witch_patrol(heart_pos)
-	local target = player_near(heart_pos, 55)
+	local target = player_near(heart_pos, 80)
 	local count = math.random(2, 3)
 	local spawned = 0
 
@@ -784,7 +783,7 @@ local function grow(pos)
 	end
 
 	local any_player = false
-	for _, object in ipairs(core.get_objects_inside_radius(pos, 72)) do
+	for _, object in ipairs(core.get_objects_inside_radius(pos, 96)) do
 		if object:is_player() then
 			any_player = true
 			break
@@ -1008,7 +1007,7 @@ local function nest_tick(pos)
 	if left <= 0 then
 		return false
 	end
-	if mcl_vars.difficulty == 0 or core.is_protected(pos, "") or not player_near(pos, 26) then
+	if mcl_vars.difficulty == 0 or core.is_protected(pos, "") or not player_near(pos, 128) then
 		return true
 	end
 	local guards = 0
