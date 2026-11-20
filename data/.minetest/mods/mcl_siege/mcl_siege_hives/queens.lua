@@ -579,6 +579,10 @@ return function(hive)
 			tracking_distance = 27,
 			attack_type = "melee",
 			floats = 1,
+			fire_resistant = (mobility == "run"),
+			lava_damage = (mobility == "run") and 0 or 4,
+			igniter_damage = (mobility == "run") and 0 or 1,
+			ignore_lava = (mobility == "run"),
 			knock_back = false,
 			armor = { fleshy = 85, arthropod = 100 },
 			sounds = {
@@ -613,6 +617,9 @@ return function(hive)
 			attack_end = attack_end,
 			receive_damage = function(self, reason, dmg)
 				if reason and reason.type == "suffocation" then
+					return 0
+				end
+				if self._siege_mobility == "run" and reason and (reason.type == "lava" or reason.type == "fire" or reason.type == "burning") then
 					return 0
 				end
 				-- Веспера прыгает в случайную свободную сторону при получении удара
